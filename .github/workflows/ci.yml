@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2 # keep in sync with package.json "packageManager"
+      - run: bun install --frozen-lockfile
+      - run: bun run build:packages
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run check:exports
+      - run: bun run check:boundaries
+      - run: bun scripts/build-yoga-asm.ts --check
+      - run: bun run pack:smoke
+      - run: bun run --filter './examples/*' build

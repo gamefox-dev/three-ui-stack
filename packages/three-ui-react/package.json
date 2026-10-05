@@ -1,0 +1,46 @@
+{
+  "name": "three-ui-react",
+  "version": "0.1.0",
+  "description": "React renderer (react-reconciler, mutation mode) for three-ui. No React DOM required.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "keywords": ["react", "react-reconciler", "three", "ui", "webgpu", "react-native"],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "dev": "bun run build && vite build --watch --emptyOutDir=false",
+    "typecheck": "tsc -p tsconfig.json",
+    "prepack": "bun run build"
+  },
+  "dependencies": {
+    "react-reconciler": "catalog:",
+    "three-2d": "workspace:^",
+    "three-ui": "workspace:^"
+  },
+  "peerDependencies": {
+    "react": "catalog:",
+    "three": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-reconciler": "catalog:",
+    "@types/three": "catalog:",
+    "react": "catalog:",
+    "three": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

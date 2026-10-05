@@ -1,0 +1,37 @@
+{
+  "name": "three-2d",
+  "version": "0.1.0",
+  "description": "libGDX-inspired batched 2D rendering primitives on top of Three.js (WebGPU / WebGL2 / React Native WebGPU).",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "keywords": ["three", "threejs", "2d", "sprite", "spritebatch", "tsl", "webgpu"],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "dev": "bun run build && vite build --watch --emptyOutDir=false",
+    "typecheck": "tsc -p tsconfig.json",
+    "prepack": "bun run build"
+  },
+  "peerDependencies": {
+    "three": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/three": "catalog:",
+    "three": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

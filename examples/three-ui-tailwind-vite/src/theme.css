@@ -1,0 +1,10 @@
+@import "tailwindcss";
+@import "three-ui-tailwind";
+
+/* CSS-first Tailwind v4 theme: these variables become three-ui theme data (colors, spacing, font family). */
+@theme {
+  --color-primary: #7c3aed;
+  --color-primary-soft: #a78bfa;
+  --font-ui: Inter;
+  --spacing: 4px;
+}

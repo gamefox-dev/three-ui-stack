@@ -1,0 +1,48 @@
+{
+ "name": "min-max-nested",
+ "width": 500,
+ "height": 400,
+ "root": {
+  "style": {
+   "flexDirection": "row",
+   "padding": 8
+  },
+  "children": [
+   {
+    "style": {
+     "flex": 1,
+     "minWidth": 120,
+     "maxWidth": 200,
+     "padding": 6
+    },
+    "children": [
+     {
+      "style": {
+       "height": 20
+      }
+     },
+     {
+      "style": {
+       "height": 20,
+       "marginTop": 4
+      }
+     }
+    ]
+   },
+   {
+    "style": {
+     "flex": 1,
+     "borderWidth": 4
+    },
+    "children": [
+     {
+      "style": {
+       "flex": 1,
+       "margin": 5
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

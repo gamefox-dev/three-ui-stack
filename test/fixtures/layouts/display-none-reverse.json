@@ -1,0 +1,32 @@
+{
+ "name": "display-none-reverse",
+ "width": 300,
+ "height": 120,
+ "root": {
+  "style": {
+   "flexDirection": "row-reverse",
+   "alignItems": "flex-start"
+  },
+  "children": [
+   {
+    "style": {
+     "width": 40,
+     "height": 40
+    }
+   },
+   {
+    "style": {
+     "display": "none",
+     "width": 999,
+     "height": 999
+    }
+   },
+   {
+    "style": {
+     "width": 60,
+     "height": 70
+    }
+   }
+  ]
+ }
+}

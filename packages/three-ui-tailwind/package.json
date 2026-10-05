@@ -1,0 +1,89 @@
+{
+  "name": "three-ui-tailwind",
+  "version": "0.1.0",
+  "description": "Tailwind CSS v4 authoring for three-ui: classes compile to three-ui style data, no DOM CSS and no runtime CSS parsing.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "keywords": [
+    "tailwind",
+    "tailwindcss",
+    "three",
+    "ui",
+    "vite",
+    "metro"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "style": "./theme.css",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./vite": {
+      "types": "./dist/vite.d.ts",
+      "import": "./dist/vite.js",
+      "default": "./dist/vite.js"
+    },
+    "./metro": {
+      "types": "./dist/metro.d.ts",
+      "import": "./dist/metro.js",
+      "default": "./dist/metro.js"
+    },
+    "./compiler": {
+      "types": "./dist/compiler.d.ts",
+      "import": "./dist/compiler.js",
+      "default": "./dist/compiler.js"
+    },
+    "./theme.css": "./theme.css",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "theme.css",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "dev": "bun run build && vite build --watch --emptyOutDir=false",
+    "typecheck": "tsc -p tsconfig.json",
+    "prepack": "bun run build"
+  },
+  "dependencies": {
+    "three-ui": "workspace:^"
+  },
+  "peerDependencies": {
+    "@tailwindcss/node": "catalog:",
+    "tailwindcss": "catalog:",
+    "three-ui-react": "workspace:^",
+    "vite": ">=6"
+  },
+  "peerDependenciesMeta": {
+    "@tailwindcss/node": {
+      "optional": true
+    },
+    "three-ui-react": {
+      "optional": true
+    },
+    "vite": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@tailwindcss/node": "catalog:",
+    "@tailwindcss/oxide": "catalog:",
+    "@types/node": "catalog:",
+    "tailwindcss": "catalog:",
+    "three-ui-react": "workspace:^",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  },
+  "bin": {
+    "three-ui-tailwind": "./bin/three-ui-tailwind.js"
+  }
+}

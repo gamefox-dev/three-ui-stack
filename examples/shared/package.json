@@ -1,0 +1,22 @@
+{
+  "name": "example-shared",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Browser helpers shared by the examples: renderer boot, asset loading, procedural textures.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "three": "catalog:",
+    "three-2d": "workspace:^",
+    "three-ui": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/three": "catalog:",
+    "typescript": "catalog:"
+  }
+}

@@ -1,0 +1,27 @@
+{
+ "name": "scroll-overflow",
+ "width": 200,
+ "height": 100,
+ "root": {
+  "style": {
+   "overflow": "scroll"
+  },
+  "children": [
+   {
+    "style": {
+     "height": 80
+    }
+   },
+   {
+    "style": {
+     "height": 80
+    }
+   },
+   {
+    "style": {
+     "height": 80
+    }
+   }
+  ]
+ }
+}

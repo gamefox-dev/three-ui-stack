@@ -1,0 +1,15 @@
+/*
+ * three-ui-tailwind — optional theme defaults for three-ui.
+ *
+ *   @import "tailwindcss";
+ *   @import "three-ui-tailwind";
+ *
+ *   @theme { --color-primary: #6d5dfc; --font-ui: Inter; --spacing: 4px; }
+ *
+ * Tailwind compiles these utilities to three-ui style data (no DOM CSS). Font families name fonts
+ * registered in `ui.fonts` (bitmap fonts baked with three-2d-font); unknown families fall back to the
+ * registered default.
+ */
+@theme {
+  --default-font-family: system-ui;
+}

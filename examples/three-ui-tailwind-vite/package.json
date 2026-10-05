@@ -1,0 +1,32 @@
+{
+  "name": "example-three-ui-tailwind-vite",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Flagship showcase: React + Tailwind v4 classes compiled to three-ui style data, rendered by three-ui on WebGPU/WebGL2.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "example-shared": "workspace:^",
+    "react": "catalog:",
+    "three": "catalog:",
+    "three-2d": "workspace:^",
+    "three-ui": "workspace:^",
+    "three-ui-react": "workspace:^",
+    "three-ui-tailwind": "workspace:^"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "catalog:",
+    "@types/react": "catalog:",
+    "@types/three": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "react-dom": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

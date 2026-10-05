@@ -1,0 +1,31 @@
+{
+  "name": "example-three-ui-react-native-webgpu",
+  "private": true,
+  "version": "0.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo run:ios",
+    "android": "expo run:android",
+    "typecheck": "tsc -p tsconfig.json",
+    "export:check": "expo export --platform ios --output-dir .expo-export"
+  },
+  "dependencies": {
+    "babel-preset-expo": "~57.0.0",
+    "expo": "~57.0.26",
+    "expo-asset": "~57.0.0",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-webgpu": "0.5.17",
+    "three": "catalog:",
+    "three-2d": "workspace:^",
+    "three-2d-font": "workspace:^",
+    "three-ui": "workspace:^",
+    "three-ui-react": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.0",
+    "@types/three": "catalog:",
+    "typescript": "catalog:"
+  }
+}

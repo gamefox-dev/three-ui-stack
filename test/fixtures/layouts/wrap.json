@@ -1,0 +1,45 @@
+{
+ "name": "wrap",
+ "width": 220,
+ "height": 300,
+ "root": {
+  "style": {
+   "flexDirection": "row",
+   "flexWrap": "wrap",
+   "gap": 10,
+   "alignContent": "flex-start"
+  },
+  "children": [
+   {
+    "style": {
+     "width": 100,
+     "height": 40
+    }
+   },
+   {
+    "style": {
+     "width": 100,
+     "height": 60
+    }
+   },
+   {
+    "style": {
+     "width": 100,
+     "height": 40
+    }
+   },
+   {
+    "style": {
+     "width": 100,
+     "height": 40
+    }
+   },
+   {
+    "style": {
+     "width": 50,
+     "height": 20
+    }
+   }
+  ]
+ }
+}

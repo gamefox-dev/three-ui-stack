@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "three-ui WebGPU",
+    "slug": "three-ui-react-native-webgpu",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": { "bundleIdentifier": "dev.three-ui.example" },
+    "android": { "package": "dev.three_ui.example" }
+  }
+}

@@ -1,0 +1,33 @@
+{
+ "name": "row-grow-gap",
+ "width": 400,
+ "height": 200,
+ "root": {
+  "style": {
+   "flexDirection": "row",
+   "padding": 10,
+   "gap": 8
+  },
+  "children": [
+   {
+    "style": {
+     "width": 50,
+     "height": 50
+    }
+   },
+   {
+    "style": {
+     "flexGrow": 1,
+     "height": 80
+    }
+   },
+   {
+    "style": {
+     "flex": 2,
+     "alignSelf": "flex-end",
+     "height": 30
+    }
+   }
+  ]
+ }
+}

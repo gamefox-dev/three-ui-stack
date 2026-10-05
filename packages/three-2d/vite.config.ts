@@ -1,0 +1,7 @@
+import { resolve } from 'node:path'
+import { defineLibraryConfig, externalPackage } from '../../vite.shared.ts'
+
+export default defineLibraryConfig({
+  entries: { index: resolve(import.meta.dirname, 'src/index.ts') },
+  external: [externalPackage('three')],
+})

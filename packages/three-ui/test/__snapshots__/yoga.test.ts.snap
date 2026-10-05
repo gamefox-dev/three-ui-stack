@@ -1,0 +1,280 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Yoga runtime portability > asm.js and WASM bindings agree on absolute-percent-aspect 1`] = `
+{
+  "children": [
+    {
+      "children": [],
+      "h": 30,
+      "w": 80,
+      "x": 220,
+      "y": 10,
+    },
+    {
+      "children": [],
+      "h": 160,
+      "w": 320,
+      "x": 0,
+      "y": 0,
+    },
+    {
+      "children": [],
+      "h": 40,
+      "w": 40,
+      "x": 0,
+      "y": 200,
+    },
+  ],
+  "h": 240,
+  "w": 320,
+  "x": 0,
+  "y": 0,
+}
+`;
+
+exports[`Yoga runtime portability > asm.js and WASM bindings agree on column-justify-align 1`] = `
+{
+  "children": [
+    {
+      "children": [],
+      "h": 40,
+      "w": 100,
+      "x": 100,
+      "y": 16,
+    },
+    {
+      "children": [],
+      "h": 40,
+      "w": 134,
+      "x": 83,
+      "y": 130,
+    },
+    {
+      "children": [],
+      "h": 40,
+      "w": 60,
+      "x": 130,
+      "y": 244,
+    },
+  ],
+  "h": 300,
+  "w": 300,
+  "x": 0,
+  "y": 0,
+}
+`;
+
+exports[`Yoga runtime portability > asm.js and WASM bindings agree on display-none-reverse 1`] = `
+{
+  "children": [
+    {
+      "children": [],
+      "h": 40,
+      "w": 40,
+      "x": 260,
+      "y": 0,
+    },
+    {
+      "children": [],
+      "h": 0,
+      "w": 0,
+      "x": 0,
+      "y": 0,
+    },
+    {
+      "children": [],
+      "h": 70,
+      "w": 60,
+      "x": 200,
+      "y": 0,
+    },
+  ],
+  "h": 120,
+  "w": 300,
+  "x": 0,
+  "y": 0,
+}
+`;
+
+exports[`Yoga runtime portability > asm.js and WASM bindings agree on measured-leaves 1`] = `
+{
+  "children": [
+    {
+      "children": [],
+      "h": 33,
+      "w": 90,
+      "x": 4,
+      "y": 4,
+    },
+    {
+      "children": [],
+      "h": 21,
+      "w": 70,
+      "x": 100,
+      "y": 4,
+    },
+  ],
+  "h": 200,
+  "w": 260,
+  "x": 0,
+  "y": 0,
+}
+`;
+
+exports[`Yoga runtime portability > asm.js and WASM bindings agree on min-max-nested 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": [],
+          "h": 20,
+          "w": 188,
+          "x": 6,
+          "y": 6,
+        },
+        {
+          "children": [],
+          "h": 20,
+          "w": 188,
+          "x": 6,
+          "y": 30,
+        },
+      ],
+      "h": 384,
+      "w": 200,
+      "x": 8,
+      "y": 8,
+    },
+    {
+      "children": [
+        {
+          "children": [],
+          "h": 366,
+          "w": 266,
+          "x": 9,
+          "y": 9,
+        },
+      ],
+      "h": 384,
+      "w": 284,
+      "x": 208,
+      "y": 8,
+    },
+  ],
+  "h": 400,
+  "w": 500,
+  "x": 0,
+  "y": 0,
+}
+`;
+
+exports[`Yoga runtime portability > asm.js and WASM bindings agree on row-grow-gap 1`] = `
+{
+  "children": [
+    {
+      "children": [],
+      "h": 50,
+      "w": 50,
+      "x": 10,
+      "y": 10,
+    },
+    {
+      "children": [],
+      "h": 80,
+      "w": 105,
+      "x": 68,
+      "y": 10,
+    },
+    {
+      "children": [],
+      "h": 30,
+      "w": 209,
+      "x": 181,
+      "y": 160,
+    },
+  ],
+  "h": 200,
+  "w": 400,
+  "x": 0,
+  "y": 0,
+}
+`;
+
+exports[`Yoga runtime portability > asm.js and WASM bindings agree on scroll-overflow 1`] = `
+{
+  "children": [
+    {
+      "children": [],
+      "h": 80,
+      "w": 200,
+      "x": 0,
+      "y": 0,
+    },
+    {
+      "children": [],
+      "h": 80,
+      "w": 200,
+      "x": 0,
+      "y": 80,
+    },
+    {
+      "children": [],
+      "h": 80,
+      "w": 200,
+      "x": 0,
+      "y": 160,
+    },
+  ],
+  "h": 100,
+  "w": 200,
+  "x": 0,
+  "y": 0,
+}
+`;
+
+exports[`Yoga runtime portability > asm.js and WASM bindings agree on wrap 1`] = `
+{
+  "children": [
+    {
+      "children": [],
+      "h": 40,
+      "w": 100,
+      "x": 0,
+      "y": 0,
+    },
+    {
+      "children": [],
+      "h": 60,
+      "w": 100,
+      "x": 110,
+      "y": 0,
+    },
+    {
+      "children": [],
+      "h": 40,
+      "w": 100,
+      "x": 0,
+      "y": 70,
+    },
+    {
+      "children": [],
+      "h": 40,
+      "w": 100,
+      "x": 110,
+      "y": 70,
+    },
+    {
+      "children": [],
+      "h": 20,
+      "w": 50,
+      "x": 0,
+      "y": 120,
+    },
+  ],
+  "h": 300,
+  "w": 220,
+  "x": 0,
+  "y": 0,
+}
+`;

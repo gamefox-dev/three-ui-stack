@@ -1,0 +1,29 @@
+name: Release (manual)
+
+# Publishing needs maintainer credentials and approval: this workflow only runs when dispatched by hand.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: npm dist-tag (latest or next)
+        default: next
+      dry_run:
+        description: Dry run (no registry writes)
+        type: boolean
+        default: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run pack:smoke
+      - run: bun scripts/publish-packages.ts --tag ${{ inputs.tag }} ${{ inputs.dry_run && '--dry-run' || '' }}
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}

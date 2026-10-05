@@ -18,7 +18,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { listPackages, topoSort } from './lib'
+import { listPackages, root, topoSort } from './lib'
 
 const args = process.argv.slice(2)
 const flag = (name: string) => args.includes(name)
@@ -79,7 +79,7 @@ try {
     }
     const publishArgs = ['publish', p.file, '--access', 'public', ...(tag ? ['--tag', tag] : []), ...(dryRun ? ['--dry-run'] : [])]
     console.log(`→ bun ${publishArgs.join(' ')}`)
-    sh('bun', publishArgs, work)
+    sh('bun', publishArgs, root) // bun needs a package.json in cwd even when publishing a tarball
     console.log(`✓ ${dryRun ? 'dry-run ' : ''}${p.name}@${p.version}`)
   }
 } finally {

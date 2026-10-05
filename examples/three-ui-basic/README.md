@@ -1,6 +1,6 @@
 # three-ui-basic
 
-Vite + plain TypeScript — **`three-ui` without React** (proving React and Tailwind are optional).
+Vite + plain TypeScript — **`@implicit-invocation/three-ui` without React** (proving React and Tailwind are optional).
 
 ```bash
 bun run dev        # http://localhost:5172   (?webgl for the WebGL2 backend)

@@ -62,7 +62,7 @@ try {
   for (const pkg of packages) {
     if (!existsSync(join(pkg.dir, 'dist'))) die(`${pkg.name}: dist/ is missing — run \`bun run build:packages\` first`)
     sh('bun', ['pm', 'pack', '--destination', tarballs], pkg.dir)
-    const file = join(tarballs, `${pkg.name}-${pkg.version}.tgz`)
+    const file = join(tarballs, `${pkg.name.replace(/^@/, '').replace('/', '-')}-${pkg.version}.tgz`)
     if (!existsSync(file)) die(`${pkg.name}: expected tarball ${file}`)
     const manifest = sh('tar', ['-xOzf', file, 'package/package.json'], work)
     for (const token of ['workspace:', 'catalog:']) {

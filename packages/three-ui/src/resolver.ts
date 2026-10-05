@@ -12,7 +12,7 @@ export interface ResolvedClassStyle {
 }
 
 /**
- * Pluggable `className` → style resolution. `three-ui` has no Tailwind dependency; `three-ui-tailwind`
+ * Pluggable `className` → style resolution. `@implicit-invocation/three-ui` has no Tailwind dependency; `@implicit-invocation/three-ui-tailwind`
  * (or any other tool) provides an implementation.
  */
 export interface ClassNameResolver {

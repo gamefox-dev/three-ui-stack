@@ -1,4 +1,4 @@
-import { GlyphLayout, type BitmapFont, type TextAlign } from 'three-2d'
+import { GlyphLayout, type BitmapFont, type TextAlign } from '@implicit-invocation/three-2d'
 
 export interface TextLayoutParams {
   text: string

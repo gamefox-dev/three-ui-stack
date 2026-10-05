@@ -1,5 +1,5 @@
 {
-  "name": "three-ui-tailwind",
+  "name": "@implicit-invocation/three-ui-tailwind",
   "version": "0.1.0",
   "description": "Tailwind CSS v4 authoring for three-ui: classes compile to three-ui style data, no DOM CSS and no runtime CSS parsing.",
   "license": "MIT",
@@ -55,19 +55,19 @@
     "prepack": "bun run build"
   },
   "dependencies": {
-    "three-ui": "workspace:^"
+    "@implicit-invocation/three-ui": "workspace:^"
   },
   "peerDependencies": {
     "@tailwindcss/node": "catalog:",
     "tailwindcss": "catalog:",
-    "three-ui-react": "workspace:^",
+    "@implicit-invocation/three-ui-react": "workspace:^",
     "vite": ">=6"
   },
   "peerDependenciesMeta": {
     "@tailwindcss/node": {
       "optional": true
     },
-    "three-ui-react": {
+    "@implicit-invocation/three-ui-react": {
       "optional": true
     },
     "vite": {
@@ -79,11 +79,14 @@
     "@tailwindcss/oxide": "catalog:",
     "@types/node": "catalog:",
     "tailwindcss": "catalog:",
-    "three-ui-react": "workspace:^",
+    "@implicit-invocation/three-ui-react": "workspace:^",
     "typescript": "catalog:",
     "vite": "catalog:"
   },
   "bin": {
     "three-ui-tailwind": "./bin/three-ui-tailwind.js"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

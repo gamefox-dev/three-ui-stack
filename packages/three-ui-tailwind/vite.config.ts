@@ -10,7 +10,7 @@ export default defineLibraryConfig({
     'compile-cli': resolve(import.meta.dirname, 'src/compile-cli.ts'),
   },
   external: [
-    externalPackage('three-ui'),
+    externalPackage('@implicit-invocation/three-ui'),
     externalPackage('vite'),
     externalPackage('tailwindcss'),
     externalPackage('@tailwindcss/node'),

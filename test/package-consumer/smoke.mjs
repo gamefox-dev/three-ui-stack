@@ -10,7 +10,7 @@ const fontBytes = (() => {
 })()
 
 // ── three-2d ──────────────────────────────────────────────────────────────────────────────────────────────
-const t2d = await import('three-2d')
+const t2d = await import('@implicit-invocation/three-2d')
 assert.equal(typeof t2d.SpriteBatch, 'function')
 assert.equal(typeof t2d.TextureRegion, 'function')
 assert.equal(typeof t2d.BitmapFont, 'function')
@@ -22,18 +22,18 @@ assert.equal(batch.stats.sprites, 1)
 batch.dispose()
 
 // ── three-2d-font (+ node entry + CLI bin) ──────────────────────────────────────────────────────────────────
-const font = await import('three-2d-font')
+const font = await import('@implicit-invocation/three-2d-font')
 const baked = await font.bakeBitmapFont(fontBytes, { size: 16, characters: 'ab' })
 assert.equal(baked.json.format, 'three-2d-bitmap-font')
 assert.ok(baked.json.glyphs.length >= 3)
-const fontNode = await import('three-2d-font/node')
+const fontNode = await import('@implicit-invocation/three-2d-font/node')
 assert.equal(typeof fontNode.encodePng, 'function')
 const cli = spawnSync('npx', ['--no-install', 'three-2d-font', '--help'], { encoding: 'utf8', shell: process.platform === 'win32' })
 assert.match(cli.stdout, /three-2d-font pack/)
 
 // ── three-ui (+ web) : headless layout proves the bundled asm.js Yoga works ───────────────────────────────────
-const ui = await import('three-ui')
-const web = await import('three-ui/web')
+const ui = await import('@implicit-invocation/three-ui')
+const web = await import('@implicit-invocation/three-ui/web')
 assert.equal(typeof web.attachDOMInput, 'function')
 assert.equal(typeof globalThis.WebAssembly === 'undefined' || true, true)
 const app = ui.createThreeUI({ width: 200, height: 100 })
@@ -44,19 +44,19 @@ assert.deepEqual({ ...child.layout }, { x: 10, y: 10, width: 90, height: 20 })
 app.dispose()
 
 // ── three-ui-react ────────────────────────────────────────────────────────────────────────────────────────────
-const react = await import('three-ui-react')
+const react = await import('@implicit-invocation/three-ui-react')
 assert.equal(typeof react.createThreeUIRoot, 'function')
 assert.equal(typeof react.View, 'function')
 
 // ── three-ui-tailwind: runtime, compiler, vite, metro ────────────────────────────────────────────────────────────
-const tw = await import('three-ui-tailwind')
+const tw = await import('@implicit-invocation/three-ui-tailwind')
 assert.equal(typeof tw.createTailwindResolver, 'function')
-const vite = await import('three-ui-tailwind/vite')
+const vite = await import('@implicit-invocation/three-ui-tailwind/vite')
 assert.equal(typeof vite.threeUITailwind, 'function')
 assert.equal(vite.threeUITailwind({ css: './x.css' }).name, 'three-ui-tailwind')
-const metro = await import('three-ui-tailwind/metro')
+const metro = await import('@implicit-invocation/three-ui-tailwind/metro')
 assert.equal(typeof metro.withThreeUITailwind, 'function')
-const compiler = await import('three-ui-tailwind/compiler')
+const compiler = await import('@implicit-invocation/three-ui-tailwind/compiler')
 const { registry } = await compiler.compileTailwind({ css: '@import "tailwindcss";', base: process.cwd(), candidates: ['flex', 'p-4', 'hover:bg-red-500'] })
 assert.equal(registry.format, 'three-ui-tailwind-registry')
 assert.ok(registry.rules.some((r) => r.token === 'p-4'))
@@ -67,7 +67,7 @@ assert.equal(r.style.padding, 16)
 probe.dispose()
 
 // ── only declared exports are importable ────────────────────────────────────────────────────────────────────────
-for (const bad of ['three-ui/dist/index.js', 'three-2d/src/index.ts', 'three-ui-react/dist/renderer/root.js']) {
+for (const bad of ['@implicit-invocation/three-ui/dist/index.js', '@implicit-invocation/three-2d/src/index.ts', '@implicit-invocation/three-ui-react/dist/renderer/root.js']) {
   await assert.rejects(() => import(bad), (e) => e.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED' || e.code === 'ERR_MODULE_NOT_FOUND', `${bad} must not be importable`)
 }
 

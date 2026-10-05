@@ -82,7 +82,7 @@ export function threeUITailwind(options: ThreeUITailwindOptions): Plugin {
         return `export default ${JSON.stringify(result.registry)}\n`
       }
       if (id === resolved(REGISTER_ID)) {
-        return `import registry from '${REGISTRY_ID}'\nimport { registerTailwind } from 'three-ui-tailwind'\nexport const resolver = registerTailwind(registry)\nexport default resolver\n`
+        return `import registry from '${REGISTRY_ID}'\nimport { registerTailwind } from '@implicit-invocation/three-ui-tailwind'\nexport const resolver = registerTailwind(registry)\nexport default resolver\n`
       }
       return null
     },

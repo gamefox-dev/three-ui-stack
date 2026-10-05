@@ -6,8 +6,8 @@
       "name": "three-2d-monorepo",
       "devDependencies": {
         "@changesets/cli": "catalog:",
+        "@implicit-invocation/three-2d-font": "workspace:^",
         "@types/node": "catalog:",
-        "three-2d-font": "workspace:^",
         "typescript": "catalog:",
         "vite": "catalog:",
         "vitest": "catalog:",
@@ -17,9 +17,9 @@
       "name": "example-shared",
       "version": "0.0.0",
       "dependencies": {
+        "@implicit-invocation/three-2d": "workspace:^",
+        "@implicit-invocation/three-ui": "workspace:^",
         "three": "catalog:",
-        "three-2d": "workspace:^",
-        "three-ui": "workspace:^",
       },
       "devDependencies": {
         "@types/three": "catalog:",
@@ -30,10 +30,10 @@
       "name": "example-three-2d-basic",
       "version": "0.0.0",
       "dependencies": {
+        "@implicit-invocation/three-2d": "workspace:^",
+        "@implicit-invocation/three-2d-font": "workspace:^",
         "example-shared": "workspace:^",
         "three": "catalog:",
-        "three-2d": "workspace:^",
-        "three-2d-font": "workspace:^",
       },
       "devDependencies": {
         "@types/three": "catalog:",
@@ -45,10 +45,10 @@
       "name": "example-three-ui-basic",
       "version": "0.0.0",
       "dependencies": {
+        "@implicit-invocation/three-2d": "workspace:^",
+        "@implicit-invocation/three-ui": "workspace:^",
         "example-shared": "workspace:^",
         "three": "catalog:",
-        "three-2d": "workspace:^",
-        "three-ui": "workspace:^",
       },
       "devDependencies": {
         "@types/three": "catalog:",
@@ -60,6 +60,10 @@
       "name": "example-three-ui-react-native-webgpu",
       "version": "0.0.0",
       "dependencies": {
+        "@implicit-invocation/three-2d": "workspace:^",
+        "@implicit-invocation/three-2d-font": "workspace:^",
+        "@implicit-invocation/three-ui": "workspace:^",
+        "@implicit-invocation/three-ui-react": "workspace:^",
         "babel-preset-expo": "~57.0.0",
         "expo": "~57.0.26",
         "expo-asset": "~57.0.0",
@@ -67,10 +71,6 @@
         "react-native": "0.86.3",
         "react-native-webgpu": "0.5.17",
         "three": "catalog:",
-        "three-2d": "workspace:^",
-        "three-2d-font": "workspace:^",
-        "three-ui": "workspace:^",
-        "three-ui-react": "workspace:^",
       },
       "devDependencies": {
         "@types/react": "~19.2.0",
@@ -82,12 +82,12 @@
       "name": "example-three-ui-react-vite",
       "version": "0.0.0",
       "dependencies": {
+        "@implicit-invocation/three-2d": "workspace:^",
+        "@implicit-invocation/three-ui": "workspace:^",
+        "@implicit-invocation/three-ui-react": "workspace:^",
         "example-shared": "workspace:^",
         "react": "catalog:",
         "three": "catalog:",
-        "three-2d": "workspace:^",
-        "three-ui": "workspace:^",
-        "three-ui-react": "workspace:^",
       },
       "devDependencies": {
         "@types/react": "catalog:",
@@ -102,13 +102,13 @@
       "name": "example-three-ui-tailwind-vite",
       "version": "0.0.0",
       "dependencies": {
+        "@implicit-invocation/three-2d": "workspace:^",
+        "@implicit-invocation/three-ui": "workspace:^",
+        "@implicit-invocation/three-ui-react": "workspace:^",
+        "@implicit-invocation/three-ui-tailwind": "workspace:^",
         "example-shared": "workspace:^",
         "react": "catalog:",
         "three": "catalog:",
-        "three-2d": "workspace:^",
-        "three-ui": "workspace:^",
-        "three-ui-react": "workspace:^",
-        "three-ui-tailwind": "workspace:^",
       },
       "devDependencies": {
         "@tailwindcss/vite": "catalog:",
@@ -122,7 +122,7 @@
       },
     },
     "packages/three-2d": {
-      "name": "three-2d",
+      "name": "@implicit-invocation/three-2d",
       "version": "0.1.0",
       "devDependencies": {
         "@types/node": "catalog:",
@@ -136,14 +136,14 @@
       },
     },
     "packages/three-2d-font": {
-      "name": "three-2d-font",
+      "name": "@implicit-invocation/three-2d-font",
       "version": "0.1.0",
       "bin": {
         "three-2d-font": "./bin/three-2d-font.js",
       },
       "dependencies": {
+        "@implicit-invocation/three-2d": "workspace:^",
         "opentype.js": "catalog:",
-        "three-2d": "workspace:^",
       },
       "devDependencies": {
         "@types/node": "catalog:",
@@ -157,10 +157,10 @@
       },
     },
     "packages/three-ui": {
-      "name": "three-ui",
+      "name": "@implicit-invocation/three-ui",
       "version": "0.1.0",
       "dependencies": {
-        "three-2d": "workspace:^",
+        "@implicit-invocation/three-2d": "workspace:^",
       },
       "devDependencies": {
         "@types/node": "catalog:",
@@ -176,12 +176,12 @@
       },
     },
     "packages/three-ui-react": {
-      "name": "three-ui-react",
+      "name": "@implicit-invocation/three-ui-react",
       "version": "0.1.0",
       "dependencies": {
+        "@implicit-invocation/three-2d": "workspace:^",
+        "@implicit-invocation/three-ui": "workspace:^",
         "react-reconciler": "catalog:",
-        "three-2d": "workspace:^",
-        "three-ui": "workspace:^",
       },
       "devDependencies": {
         "@types/node": "catalog:",
@@ -199,32 +199,32 @@
       },
     },
     "packages/three-ui-tailwind": {
-      "name": "three-ui-tailwind",
+      "name": "@implicit-invocation/three-ui-tailwind",
       "version": "0.1.0",
       "bin": {
         "three-ui-tailwind": "./bin/three-ui-tailwind.js",
       },
       "dependencies": {
-        "three-ui": "workspace:^",
+        "@implicit-invocation/three-ui": "workspace:^",
       },
       "devDependencies": {
+        "@implicit-invocation/three-ui-react": "workspace:^",
         "@tailwindcss/node": "catalog:",
         "@tailwindcss/oxide": "catalog:",
         "@types/node": "catalog:",
         "tailwindcss": "catalog:",
-        "three-ui-react": "workspace:^",
         "typescript": "catalog:",
         "vite": "catalog:",
       },
       "peerDependencies": {
+        "@implicit-invocation/three-ui-react": "workspace:^",
         "@tailwindcss/node": "catalog:",
         "tailwindcss": "catalog:",
-        "three-ui-react": "workspace:^",
         "vite": ">=6",
       },
       "optionalPeers": [
+        "@implicit-invocation/three-ui-react",
         "@tailwindcss/node",
-        "three-ui-react",
         "vite",
       ],
     },
@@ -482,6 +482,16 @@
 
     "@expo/xcpretty": ["@expo/xcpretty@4.4.6", "", { "dependencies": { "@babel/code-frame": "^7.20.0", "chalk": "^4.1.0", "js-yaml": "^4.1.0" }, "bin": { "excpretty": "build/cli.js" } }, "sha512-uRaZZ/IsX1WkFW69xxTZtMeRvI5ziD9yoian+FMqdhITkU6NGvIWd5uRMh2Gbo/6xstpQ4v0GtF1V5YatTwzDA=="],
 
+    "@implicit-invocation/three-2d": ["@implicit-invocation/three-2d@workspace:packages/three-2d"],
+
+    "@implicit-invocation/three-2d-font": ["@implicit-invocation/three-2d-font@workspace:packages/three-2d-font"],
+
+    "@implicit-invocation/three-ui": ["@implicit-invocation/three-ui@workspace:packages/three-ui"],
+
+    "@implicit-invocation/three-ui-react": ["@implicit-invocation/three-ui-react@workspace:packages/three-ui-react"],
+
+    "@implicit-invocation/three-ui-tailwind": ["@implicit-invocation/three-ui-tailwind@workspace:packages/three-ui-tailwind"],
+
     "@isaacs/ttlcache": ["@isaacs/ttlcache@1.4.1", "", {}, "sha512-RQgQ4uQ+pLbqXfOmieB91ejmLwvSgv9nLx6sT6sD83s7umBypgg+OIBOBbEUiJXrfpnp9j0mRhYYdzp9uqq3lA=="],
 
     "@jest/schemas": ["@jest/schemas@29.6.3", "", { "dependencies": { "@sinclair/typebox": "^0.27.8" } }, "sha512-mo5j5X+jIZmJQveBKeS/clAueipV7KgiX1vMgCxam1RNYiqE1w62n0/tJJnHtjW8ZHcQco5gY85jA3mi0L+nSA=="],
@@ -612,7 +622,7 @@
 
     "@types/node": ["@types/node@24.19.1", "", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-aS3/DG0oM05K0RIXXP+hKjinGG5IgSSVGzswZxW3O0sS3pH4/fycXundUC9XsszgKCk4gHXylTEK6hyFxVxnoQ=="],
 
-    "@types/react": ["@types/react@19.2.18", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w=="],
+    "@types/react": ["@types/react@19.3.0", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg=="],
 
     "@types/react-reconciler": ["@types/react-reconciler@0.33.1", "", { "peerDependencies": { "@types/react": "*" } }, "sha512-0kF59ji2mKuHUd5wytHSpmORybMYVerJvq0K10pz9ZFoOlJ3e+w1LBjLshWpCrokeyQOioRodNbO4PH4ddvRfg=="],
 
@@ -1140,7 +1150,7 @@
 
     "range-parser": ["range-parser@1.2.1", "", {}, "sha512-Hrgsx+orqoygnmhFbKaHE6c296J+HTAQXoxEF6gNupROmmGJRoyzfG3ccAveqCBrwr/2yxQ5BVd/GTl5agOwSg=="],
 
-    "react": ["react@19.2.3", "", {}, "sha512-Ku/hhYbVjOQnXDZFv2+RibmLFGwFdeeKHFcOTlrt7xplBnya5OGn/hIRDsqDiSUcfORsDC7MPxwork8jBwsIWA=="],
+    "react": ["react@19.3.0", "", {}, "sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog=="],
 
     "react-devtools-core": ["react-devtools-core@6.1.5", "", { "dependencies": { "shell-quote": "^1.6.1", "ws": "^7" } }, "sha512-ePrwPfxAnB+7hgnEr8vpKxL9cmnp7F322t8oqcPshbIQQhDKgFDW4tjhF2wjVbdXF9O/nyuy3sQWd9JGpiLPvA=="],
 
@@ -1186,7 +1196,7 @@
 
     "sax": ["sax@1.6.1", "", {}, "sha512-42tBVwLWnaQvW5zc4HbZrTuWccECCZfBi92FDuwtqxasH+JbPB3/FOKb1m222K42R4WxuxzzMsTswfzgtSu64Q=="],
 
-    "scheduler": ["scheduler@0.27.0", "", {}, "sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q=="],
+    "scheduler": ["scheduler@0.28.0", "", {}, "sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw=="],
 
     "semver": ["semver@7.8.5", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA=="],
 
@@ -1249,16 +1259,6 @@
     "terser": ["terser@5.51.2", "", { "dependencies": { "@jridgewell/source-map": "^0.3.3", "acorn": "^8.15.0", "commander": "^2.20.0", "source-map-support": "~0.5.20" }, "bin": { "terser": "bin/terser" } }, "sha512-bWnjSNscmuI+GJze6ZupnHP8G/cTcsJF+bXCeQknk2SHQsgbNJnLrqiH9jZ2W4STPVXH2mDKKRX3iwPhc9Cn/Q=="],
 
     "three": ["three@0.186.1", "", {}, "sha512-blFeqb49wRCSGUGj7gtpfnSGHy2lwDk94RhUmS1c/hTby70kvChbWpkJ4Pm1390LqzzvTmzgXKHPEafJwCb8jA=="],
-
-    "three-2d": ["three-2d@workspace:packages/three-2d"],
-
-    "three-2d-font": ["three-2d-font@workspace:packages/three-2d-font"],
-
-    "three-ui": ["three-ui@workspace:packages/three-ui"],
-
-    "three-ui-react": ["three-ui-react@workspace:packages/three-ui-react"],
-
-    "three-ui-tailwind": ["three-ui-tailwind@workspace:packages/three-ui-tailwind"],
 
     "throat": ["throat@5.0.0", "", {}, "sha512-fcwX4mndzpLQKBS1DVYhGAcYaYt7vsHNIvQV+WXMvnow5cgjPphq5CaayLaGsjRdSCKZFNGt7/GYAuXaNOiYCA=="],
 
@@ -1394,13 +1394,9 @@
 
     "connect/debug": ["debug@2.6.9", "", { "dependencies": { "ms": "2.0.0" } }, "sha512-bC7ElrdJaJnPbAP+1EotYvqZsb3ecl5wi6Bfi6BJTUcNowp6cvspg0jXznRTKDjm/E7AdgFBVeAPVMNcKGsHMA=="],
 
-    "example-three-ui-react-vite/@types/react": ["@types/react@19.3.0", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg=="],
+    "example-three-ui-react-native-webgpu/@types/react": ["@types/react@19.2.18", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w=="],
 
-    "example-three-ui-react-vite/react": ["react@19.3.0", "", {}, "sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog=="],
-
-    "example-three-ui-tailwind-vite/@types/react": ["@types/react@19.3.0", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg=="],
-
-    "example-three-ui-tailwind-vite/react": ["react@19.3.0", "", {}, "sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog=="],
+    "example-three-ui-react-native-webgpu/react": ["react@19.2.3", "", {}, "sha512-Ku/hhYbVjOQnXDZFv2+RibmLFGwFdeeKHFcOTlrt7xplBnya5OGn/hIRDsqDiSUcfORsDC7MPxwork8jBwsIWA=="],
 
     "expo-modules-autolinking/commander": ["commander@7.2.0", "", {}, "sha512-QrWXB+ZQSVPmIWIhtEO9H+gwHaMGYiF5ChvoJ+K9ZGHG/sVsa6yiesAD1GC/x46sET00Xlwo1u49RVVVzvcSkw=="],
 
@@ -1440,15 +1436,9 @@
 
     "plist/@xmldom/xmldom": ["@xmldom/xmldom@0.9.12", "", {}, "sha512-5AXjrcMClTryPe9LgZrygpB1lj7s0S9E0+W+AHaVKAVyHanafK86iPSvG5xHVSp/jC+VH1UXu0TAEmY279xH7A=="],
 
-    "react-dom/react": ["react@19.3.0", "", {}, "sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog=="],
-
-    "react-dom/scheduler": ["scheduler@0.28.0", "", {}, "sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw=="],
-
     "react-native/babel-plugin-syntax-hermes-parser": ["babel-plugin-syntax-hermes-parser@0.36.0", "", { "dependencies": { "hermes-parser": "0.36.0" } }, "sha512-LhD0xdoedDw7ansQgXbB2DADLZIK/LRXuWNBPuVzMc5S2WK5GyT89tCM+cQzxFGO0mGyLK6D5TrVOJJzAoDy8Q=="],
 
-    "react-reconciler/react": ["react@19.3.0", "", {}, "sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog=="],
-
-    "react-reconciler/scheduler": ["scheduler@0.28.0", "", {}, "sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw=="],
+    "react-native/scheduler": ["scheduler@0.27.0", "", {}, "sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q=="],
 
     "send/debug": ["debug@2.6.9", "", { "dependencies": { "ms": "2.0.0" } }, "sha512-bC7ElrdJaJnPbAP+1EotYvqZsb3ecl5wi6Bfi6BJTUcNowp6cvspg0jXznRTKDjm/E7AdgFBVeAPVMNcKGsHMA=="],
 
@@ -1461,10 +1451,6 @@
     "strip-ansi/ansi-regex": ["ansi-regex@4.1.1", "", {}, "sha512-ILlv4k/3f6vfQ4OoP2AGvirOktlQ98ZEL1k9FaQjxa3L1abBgbuTDAdPOpvbGncC0BTVQrl+OM8xZGK6tWXt7g=="],
 
     "terser/commander": ["commander@2.20.3", "", {}, "sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ=="],
-
-    "three-ui-react/@types/react": ["@types/react@19.3.0", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg=="],
-
-    "three-ui-react/react": ["react@19.3.0", "", {}, "sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog=="],
 
     "wrap-ansi/ansi-styles": ["ansi-styles@4.3.0", "", { "dependencies": { "color-convert": "^2.0.1" } }, "sha512-zbB9rCJAT1rbjiVDb2hqKFHNYLxgtk8NURxZ3IZwD3F6NtxbXZQCnnSi1Lkx+IDohdPlFp222wVALIheZJQSEg=="],
 

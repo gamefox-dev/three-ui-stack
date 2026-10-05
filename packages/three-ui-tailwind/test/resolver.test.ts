@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { View, createThreeUI, setDefaultClassNameResolver, getDefaultClassNameResolver } from 'three-ui'
+import { View, createThreeUI, setDefaultClassNameResolver, getDefaultClassNameResolver } from '@implicit-invocation/three-ui'
 import { compileTailwind } from '../src/compiler'
 import { createTailwindResolver, registerTailwind } from '../src/runtime'
 

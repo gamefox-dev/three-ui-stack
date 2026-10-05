@@ -1,7 +1,7 @@
-import type { AnimatedImage, Image, NinePatchView, ScrollView, Text, UIEvent, UIFocusEvent, UIKeyEvent, UINode, UIPointerEvent, UIWheelEvent } from 'three-ui'
-import type { Animation, NinePatch, TextureRegion } from 'three-2d'
+import type { AnimatedImage, Image, NinePatchView, ScrollView, Text, UIEvent, UIFocusEvent, UIKeyEvent, UINode, UIPointerEvent, UIWheelEvent } from '@implicit-invocation/three-ui'
+import type { Animation, NinePatch, TextureRegion } from '@implicit-invocation/three-2d'
 import type { Texture } from 'three'
-import type { Style } from 'three-ui'
+import type { Style } from '@implicit-invocation/three-ui'
 
 /** Host element types. Public code imports the typed components, not these strings. */
 export type HostType = 'tui-view' | 'tui-text' | 'tui-image' | 'tui-animatedimage' | 'tui-ninepatch' | 'tui-scrollview'
@@ -36,8 +36,8 @@ export const EVENT_PROPS: Readonly<Record<string, { type: string; capture: boole
 type Opt<T> = { [K in keyof T]?: T[K] | undefined }
 
 interface CommonPropsDef<T extends UINode = UINode> {
-  style?: import('three-ui').StyleProp
-  /** Resolved by the installed `ClassNameResolver` (e.g. `three-ui-tailwind`). */
+  style?: import('@implicit-invocation/three-ui').StyleProp
+  /** Resolved by the installed `ClassNameResolver` (e.g. `@implicit-invocation/three-ui-tailwind`). */
   className?: string | undefined
   children?: import('react').ReactNode
   /** Debug name (shows up in warnings and devtools). */
@@ -66,7 +66,7 @@ interface CommonPropsDef<T extends UINode = UINode> {
 
 export type CommonProps<T extends UINode = UINode> = Opt<CommonPropsDef<T>>
 
-export type ViewProps = CommonProps<import('three-ui').View>
+export type ViewProps = CommonProps<import('@implicit-invocation/three-ui').View>
 
 /** Strings and numbers only as children (no nested elements in v0.1). */
 export type TextProps = CommonProps<Text>

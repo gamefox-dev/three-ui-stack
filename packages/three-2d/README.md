@@ -7,7 +7,7 @@ libGDX-inspired **batched 2D rendering primitives** on top of [Three.js](https:/
 ## Install
 
 ```bash
-bun add three-2d three
+bun add @implicit-invocation/three-2d three
 ```
 
 **Peer dependencies:** `three` (`^0.186.1`).
@@ -16,7 +16,7 @@ bun add three-2d three
 
 ```ts
 import * as THREE from 'three/webgpu'
-import { Three2D, TextureRegion, configureTexture } from 'three-2d'
+import { Three2D, TextureRegion, configureTexture } from '@implicit-invocation/three-2d'
 
 const renderer = new THREE.WebGPURenderer({ antialias: false })
 await renderer.init()
@@ -35,7 +35,7 @@ renderer.setAnimationLoop(() => {
 })
 ```
 
-Lower level: `batch.begin(camera)` → `batch.draw…` → `batch.end()`. The **caller owns the renderer and the frame loop**; `three-2d` never creates either.
+Lower level: `batch.begin(camera)` → `batch.draw…` → `batch.end()`. The **caller owns the renderer and the frame loop**; `@implicit-invocation/three-2d` never creates either.
 
 ### What's inside
 

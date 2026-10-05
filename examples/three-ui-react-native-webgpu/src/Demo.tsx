@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { DataTexture } from 'three/webgpu'
-import { TextureRegion, configureTexture } from 'three-2d'
-import { Image, ScrollView, Text, View } from 'three-ui-react'
+import { TextureRegion, configureTexture } from '@implicit-invocation/three-2d'
+import { Image, ScrollView, Text, View } from '@implicit-invocation/three-ui-react'
 
 function gradientImage(): TextureRegion {
   const size = 64

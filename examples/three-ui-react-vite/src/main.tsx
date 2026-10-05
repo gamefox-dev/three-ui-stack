@@ -1,6 +1,6 @@
-import { createThreeUI } from 'three-ui'
-import { attachDOMInput } from 'three-ui/web'
-import { createThreeUIRoot } from 'three-ui-react'
+import { createThreeUI } from '@implicit-invocation/three-ui'
+import { attachDOMInput } from '@implicit-invocation/three-ui/web'
+import { createThreeUIRoot } from '@implicit-invocation/three-ui-react'
 import { bootRenderer, loop, registerInterFonts } from 'example-shared'
 import { App } from './App'
 

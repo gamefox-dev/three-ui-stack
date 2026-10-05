@@ -14,10 +14,10 @@
     "example-shared": "workspace:^",
     "react": "catalog:",
     "three": "catalog:",
-    "three-2d": "workspace:^",
-    "three-ui": "workspace:^",
-    "three-ui-react": "workspace:^",
-    "three-ui-tailwind": "workspace:^"
+    "@implicit-invocation/three-2d": "workspace:^",
+    "@implicit-invocation/three-ui": "workspace:^",
+    "@implicit-invocation/three-ui-react": "workspace:^",
+    "@implicit-invocation/three-ui-tailwind": "workspace:^"
   },
   "devDependencies": {
     "@tailwindcss/vite": "catalog:",

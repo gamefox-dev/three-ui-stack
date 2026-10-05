@@ -1,4 +1,4 @@
-import type { Animation, TextureRegion } from 'three-2d'
+import type { Animation, TextureRegion } from '@implicit-invocation/three-2d'
 import { Image, type ImageOptions } from './Image'
 import type { NodeKind } from './UINode'
 import type { ThreeUI } from './ThreeUI'

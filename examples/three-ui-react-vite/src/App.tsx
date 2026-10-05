@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Image, ScrollView, Text, View, useThreeUI, type Style, type UIPointerEvent } from 'three-ui-react'
+import { Image, ScrollView, Text, View, useThreeUI, type Style, type UIPointerEvent } from '@implicit-invocation/three-ui-react'
 import { makeAvatar } from 'example-shared'
 
 const C = { bg: '#09090b', surface: '#18181b', surface2: '#27272a', border: '#3f3f46', muted: '#a1a1aa', accent: '#8b5cf6', ok: '#22c55e', warn: '#fbbf24', danger: '#f43f5e' }

@@ -30,6 +30,6 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
 void reactDir
 
 // Tailwind (milestone 8) — enable once the example switches from `style` to `className`:
-// const { withThreeUITailwind } = require('three-ui-tailwind/metro')
+// const { withThreeUITailwind } = require('@implicit-invocation/three-ui-tailwind/metro')
 // module.exports = withThreeUITailwind(config, { css: './src/theme.css' })
 module.exports = config

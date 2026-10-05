@@ -1,4 +1,4 @@
-import { AnimatedImage, Image, NinePatchView, ScrollView, Text, type UIEvent, type UINode } from 'three-ui'
+import { AnimatedImage, Image, NinePatchView, ScrollView, Text, type UIEvent, type UINode } from '@implicit-invocation/three-ui'
 import { EVENT_PROPS, type HostProps, type HostType } from './props'
 
 interface Bridge {
@@ -80,7 +80,7 @@ export function createNode(type: HostType, props: HostProps): UINode {
 }
 
 // `View` lives in three-ui; resolved lazily to keep this module's import list tidy.
-import { View } from 'three-ui'
+import { View } from '@implicit-invocation/three-ui'
 function ViewCtor(): typeof View {
   return View
 }

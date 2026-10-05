@@ -1,14 +1,14 @@
 import { useState } from 'react'
-import { Text, View, useThreeUI } from 'three-ui-react'
+import { Text, View, useThreeUI } from '@implicit-invocation/three-ui-react'
 import { Button, Card, Chip, PageTitle, Row, useInterval } from '../kit'
 import type { PageId } from '../App'
 
 const FEATURES: { id: PageId; title: string; body: string; tag: string }[] = [
-  { id: 'layout', title: 'Yoga flexbox layout', body: 'Direction, wrap, gap, justify, align, grow/shrink. ComputedStyle is the source of truth; Yoga only calculates geometry.', tag: 'three-ui' },
-  { id: 'type', title: 'Bitmap-font text', body: 'Baked by three-2d-font, measured through Yoga, cached by font/size/width. Inherited color + size.', tag: 'three-2d-font' },
+  { id: 'layout', title: 'Yoga flexbox layout', body: 'Direction, wrap, gap, justify, align, grow/shrink. ComputedStyle is the source of truth; Yoga only calculates geometry.', tag: '@implicit-invocation/three-ui' },
+  { id: 'type', title: 'Bitmap-font text', body: 'Baked by three-2d-font, measured through Yoga, cached by font/size/width. Inherited color + size.', tag: '@implicit-invocation/three-2d-font' },
   { id: 'input', title: 'Interaction state', body: 'hover:, active:, focus:, disabled: variants, pointer capture, capture/bubble, keyboard focus.', tag: 'tailwind' },
-  { id: 'scroll', title: 'ScrollView', body: 'Clipping stack, wheel + touch drag + inertia, nested scrolling, paint culling. No DOM scrolling.', tag: 'three-ui' },
-  { id: 'media', title: 'Images & effects', body: 'Image resize modes, frame animations, nine-patch, rotate/scale transforms, rounded SDF corners.', tag: 'three-2d' },
+  { id: 'scroll', title: 'ScrollView', body: 'Clipping stack, wheel + touch drag + inertia, nested scrolling, paint culling. No DOM scrolling.', tag: '@implicit-invocation/three-ui' },
+  { id: 'media', title: 'Images & effects', body: 'Image resize modes, frame animations, nine-patch, rotate/scale transforms, rounded SDF corners.', tag: '@implicit-invocation/three-2d' },
   { id: 'perf', title: 'Counters & stress', body: 'Paint-only vs layout invalidation, batch flush counters, thousands of nodes in a handful of draw calls.', tag: 'perf' },
 ]
 

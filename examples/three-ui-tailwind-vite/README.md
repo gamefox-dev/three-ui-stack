@@ -1,6 +1,6 @@
 # three-ui-tailwind-vite — the showcase
 
-Vite + React + **Tailwind CSS v4** → `three-ui`. Classes are compiled at build time by Tailwind's own compiler and converted to
+Vite + React + **Tailwind CSS v4** → `@implicit-invocation/three-ui`. Classes are compiled at build time by Tailwind's own compiler and converted to
 style data (`threeUITailwind()` Vite plugin); no CSS is shipped or parsed at runtime.
 
 ```bash

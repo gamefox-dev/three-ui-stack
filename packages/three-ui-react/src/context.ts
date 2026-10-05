@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { ThreeUI } from 'three-ui'
+import type { ThreeUI } from '@implicit-invocation/three-ui'
 
 export const ThreeUIContext = createContext<ThreeUI | null>(null)
 

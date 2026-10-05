@@ -19,7 +19,7 @@ export interface AttachDOMInputOptions {
 
 /**
  * Feed DOM pointer / wheel / keyboard events into a `ThreeUI`. Web-only convenience: this file is the
- * only place in `three-ui` that knows about DOM event shapes (via structural types, no DOM lib needed).
+ * only place in `@implicit-invocation/three-ui` that knows about DOM event shapes (via structural types, no DOM lib needed).
  * Returns a function that removes every listener it added.
  */
 export function attachDOMInput(ui: ThreeUI, element: DOMElementLike, options: AttachDOMInputOptions = {}): () => void {

@@ -18,7 +18,7 @@ export interface BitmapGlyphJSON {
   xAdvance: number
 }
 
-/** Versioned on-disk / over-the-wire format produced by `three-2d-font` and consumed by `BitmapFont`. */
+/** Versioned on-disk / over-the-wire format produced by `@implicit-invocation/three-2d-font` and consumed by `BitmapFont`. */
 export interface BitmapFontJSON {
   format: typeof BITMAP_FONT_FORMAT
   version: typeof BITMAP_FONT_VERSION

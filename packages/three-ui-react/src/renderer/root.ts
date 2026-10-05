@@ -1,5 +1,5 @@
 import { createElement, version as reactVersion, type ReactNode } from 'react'
-import { View, type ThreeUI } from 'three-ui'
+import { View, type ThreeUI } from '@implicit-invocation/three-ui'
 import { ThreeUIContext } from '../context'
 import type { Container } from './hostConfig'
 import { reconciler } from './reconciler'
@@ -20,7 +20,7 @@ function injectDevTools(): void {
   devtoolsInjected = true
   try {
     // Lets React DevTools / Fast Refresh (dev) see this renderer.
-    reconciler.injectIntoDevTools?.({ bundleType: 1, version: reactVersion, rendererPackageName: 'three-ui-react', findFiberByHostInstance: () => null })
+    reconciler.injectIntoDevTools?.({ bundleType: 1, version: reactVersion, rendererPackageName: '@implicit-invocation/three-ui-react', findFiberByHostInstance: () => null })
   } catch {
     /* optional */
   }
@@ -50,7 +50,7 @@ export function createThreeUIRoot(ui: ThreeUI): ThreeUIRoot {
   const onError = (error: unknown) => {
     ;(globalThis as { console?: { error(...a: unknown[]): void } }).console?.error(error)
   }
-  const fiberRoot = reconciler.createContainer(container, ConcurrentRoot, null, false, null, 'three-ui', onError, onError, onError, noop, null)
+  const fiberRoot = reconciler.createContainer(container, ConcurrentRoot, null, false, null, '@implicit-invocation/three-ui', onError, onError, onError, noop, null)
   let unmounted = false
   return {
     render(node) {

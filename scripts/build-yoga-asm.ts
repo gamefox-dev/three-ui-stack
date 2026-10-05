@@ -1,8 +1,8 @@
 /**
- * Generates the synchronous, WebAssembly-free Yoga runtime used by `three-ui`.
+ * Generates the synchronous, WebAssembly-free Yoga runtime used by `@implicit-invocation/three-ui`.
  *
  * Why: `yoga-layout@3.x` only ships a WASM build (loaded with top-level await). Hermes (React Native)
- * has no browser-style `WebAssembly` global, and `three-ui`'s public API must not need async init just
+ * has no browser-style `WebAssembly` global, and `@implicit-invocation/three-ui`'s public API must not need async init just
  * for layout. Instead of depending on an old third-party asm.js fork, we derive an asm.js build from the
  * *same* Yoga release as the web binding:
  *

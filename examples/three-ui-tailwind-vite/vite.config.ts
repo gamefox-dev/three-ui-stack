@@ -1,7 +1,7 @@
 import { resolve } from 'node:path'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { threeUITailwind } from 'three-ui-tailwind/vite'
+import { threeUITailwind } from '@implicit-invocation/three-ui-tailwind/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({

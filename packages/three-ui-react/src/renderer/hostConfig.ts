@@ -1,5 +1,5 @@
 import { DefaultEventPriority, ContinuousEventPriority, DiscreteEventPriority, NoEventPriority } from 'react-reconciler/constants.js'
-import type { ThreeUI, UINode, View } from 'three-ui'
+import type { ThreeUI, UINode, View } from '@implicit-invocation/three-ui'
 import { applyProps, createNode, releaseNode, setHidden, setPriorityRunner } from './applyProps'
 import type { HostProps, HostType } from './props'
 
@@ -37,7 +37,7 @@ const queueMicro: (fn: () => void) => void = typeof host.queueMicrotask === 'fun
 
 /**
  * react-reconciler host config (mutation mode). All reconciler-specific behavior lives in this folder;
- * `three-ui` itself never sees React.
+ * `@implicit-invocation/three-ui` itself never sees React.
  */
 export const hostConfig = {
   // ───────── capabilities ─────────

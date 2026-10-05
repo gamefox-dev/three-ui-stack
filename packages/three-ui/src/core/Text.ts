@@ -1,4 +1,4 @@
-import type { GlyphLayout } from 'three-2d'
+import type { GlyphLayout } from '@implicit-invocation/three-2d'
 import { warnOnce } from '../dev'
 import type { UIDrawContext } from '../paint/DrawContext'
 import { resolveEm, TEXT_METRIC_KEYS, type ComputedStyle } from '../style/computed'

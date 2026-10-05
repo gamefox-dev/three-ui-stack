@@ -1,16 +1,16 @@
 # three-2d-font
 
-TTF/OTF → **bitmap-font atlas** tooling for [`three-2d`](../three-2d): a portable parser, two rasterizers, an atlas packer, a runtime packing API and a CLI.
+TTF/OTF → **bitmap-font atlas** tooling for [`@implicit-invocation/three-2d`](../three-2d): a portable parser, two rasterizers, an atlas packer, a runtime packing API and a CLI.
 
 > ⚠️ **Alpha (0.x)** — APIs may change before 1.0.
 
 ## Install
 
 ```bash
-bun add three-2d-font three-2d three
+bun add @implicit-invocation/three-2d-font @implicit-invocation/three-2d three
 ```
 
-**Peer dependencies:** `three`. Depends on `three-2d` and `opentype.js` (never exposed in the public API).
+**Peer dependencies:** `three`. Depends on `@implicit-invocation/three-2d` and `opentype.js` (never exposed in the public API).
 
 ## CLI (recommended for production)
 
@@ -24,7 +24,7 @@ Options: `--size`, `--charset latin|ascii|digits`, `--chars "<literal>"`, `--sup
 ## Runtime packing
 
 ```ts
-import { packBitmapFont } from 'three-2d-font'
+import { packBitmapFont } from '@implicit-invocation/three-2d-font'
 
 const font = await packBitmapFont(fontBytes /* ArrayBuffer */, {
   renderer,          // optional: bake on the GPU (Three render target); omit to use the CPU rasterizer
@@ -50,7 +50,7 @@ Pair kerning is read when the font exposes a `kern` table; GPOS-only kerning is 
 
 ## Runtime support
 
-Core (`three-2d-font`): browser, Node, Bun, React Native (no DOM, no Canvas2D). `three-2d-font/node` and the CLI need Node/Bun (`node:fs`, `node:zlib`).
+Core (`@implicit-invocation/three-2d-font`): browser, Node, Bun, React Native (no DOM, no Canvas2D). `@implicit-invocation/three-2d-font/node` and the CLI need Node/Bun (`node:fs`, `node:zlib`).
 
 ## Examples
 

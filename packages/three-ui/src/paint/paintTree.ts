@@ -1,4 +1,4 @@
-import { Affine2 } from 'three-2d'
+import { Affine2 } from '@implicit-invocation/three-2d'
 import type { UINode } from '../core/UINode'
 import { orderedChildren } from '../input/InputManager'
 import type { BatchDrawContext } from './BatchDrawContext'

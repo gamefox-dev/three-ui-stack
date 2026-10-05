@@ -1,6 +1,6 @@
 # three-ui-react-vite
 
-Vite + React (**no Tailwind**, `style` objects only) rendering into `three-ui` via `three-ui-react` (react-reconciler, mutation mode).
+Vite + React (**no Tailwind**, `style` objects only) rendering into `@implicit-invocation/three-ui` via `@implicit-invocation/three-ui-react` (react-reconciler, mutation mode).
 
 ```bash
 bun run dev        # http://localhost:5173   (?webgl for the WebGL2 backend)

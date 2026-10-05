@@ -1,5 +1,5 @@
 import { CanvasTexture, SRGBColorSpace } from 'three'
-import { NinePatch, TextureAtlas, TextureRegion, configureTexture, Animation } from 'three-2d'
+import { NinePatch, TextureAtlas, TextureRegion, configureTexture, Animation } from '@implicit-invocation/three-2d'
 
 /** Examples draw their art at startup with Canvas2D so the repo ships no binary art assets. */
 function canvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {

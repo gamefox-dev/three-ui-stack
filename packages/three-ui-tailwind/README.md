@@ -1,30 +1,30 @@
 # three-ui-tailwind
 
-**Tailwind CSS v4** authoring for [`three-ui-react`](../three-ui-react) — class names are compiled at build time to `three-ui` style data. No DOM CSS, **no CSS parsing at runtime**.
+**Tailwind CSS v4** authoring for [`@implicit-invocation/three-ui-react`](../three-ui-react) — class names are compiled at build time to `@implicit-invocation/three-ui` style data. No DOM CSS, **no CSS parsing at runtime**.
 
 > ⚠️ **Alpha (0.x)** — APIs may change before 1.0. Tailwind v4 only.
 
 ## Install
 
 ```bash
-bun add three-ui-tailwind three-ui three-ui-react
+bun add @implicit-invocation/three-ui-tailwind @implicit-invocation/three-ui @implicit-invocation/three-ui-react
 bun add -d tailwindcss @tailwindcss/node @tailwindcss/vite
 ```
 
-**Peer dependencies:** `tailwindcss ^4`, `@tailwindcss/node` (build step), `three-ui-react` (optional), `vite` (optional, for the plugin).
+**Peer dependencies:** `tailwindcss ^4`, `@tailwindcss/node` (build step), `@implicit-invocation/three-ui-react` (optional), `vite` (optional, for the plugin).
 
 ## Vite
 
 ```css
 /* src/theme.css */
 @import "tailwindcss";
-@import "three-ui-tailwind";
+@import "@implicit-invocation/three-ui-tailwind";
 @theme { --color-primary: #6d5dfc; --font-ui: Inter; --spacing: 4px; }
 ```
 
 ```ts
 // vite.config.ts
-import { threeUITailwind } from 'three-ui-tailwind/vite'
+import { threeUITailwind } from '@implicit-invocation/three-ui-tailwind/vite'
 export default defineConfig({ plugins: [react(), tailwindcss(), threeUITailwind({ css: './src/theme.css' })] })
 ```
 
@@ -42,7 +42,7 @@ The plugin runs Tailwind's own compiler (`@tailwindcss/node` + its source scanne
 ## Metro (React Native)
 
 ```js
-const { withThreeUITailwind } = require('three-ui-tailwind/metro')
+const { withThreeUITailwind } = require('@implicit-invocation/three-ui-tailwind/metro')
 module.exports = withThreeUITailwind(config, { css: './src/theme.css' })
 ```
 
@@ -58,7 +58,7 @@ Layout (`flex*`, `grow/shrink`, `items/justify/self/content`, `gap`, `size/w/h/m
 
 ## Runtime support
 
-The runtime (`three-ui-tailwind`) is platform-neutral. `three-ui-tailwind/compiler`, `/vite`, `/metro` and the CLI run in Node/Bun at build time.
+The runtime (`@implicit-invocation/three-ui-tailwind`) is platform-neutral. `@implicit-invocation/three-ui-tailwind/compiler`, `/vite`, `/metro` and the CLI run in Node/Bun at build time.
 
 ## Examples
 

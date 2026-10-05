@@ -3,7 +3,7 @@ import {
   BITMAP_FONT_VERSION,
   type BitmapFontJSON,
   type BitmapGlyphJSON,
-} from 'three-2d'
+} from '@implicit-invocation/three-2d'
 import { resolveCharacters, type CharsetName } from './charsets'
 import { AtlasPacker } from './pack/AtlasPacker'
 import { OpenTypeFontParser } from './parser'

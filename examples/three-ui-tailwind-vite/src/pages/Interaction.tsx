@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Text, View, useThreeUI, type UIPointerEvent } from 'three-ui-react'
+import { Text, View, useThreeUI, type UIPointerEvent } from '@implicit-invocation/three-ui-react'
 import { Button, Card, Chip, PageTitle, Row, Switch } from '../kit'
 
 function Draggable() {

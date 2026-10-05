@@ -1,8 +1,8 @@
 // Side effect: installs the Tailwind registry (built by the Vite plugin) as the className resolver.
 import 'virtual:three-ui-tailwind/register'
-import { createThreeUI } from 'three-ui'
-import { attachDOMInput, bindPrefersColorScheme } from 'three-ui/web'
-import { createThreeUIRoot } from 'three-ui-react'
+import { createThreeUI } from '@implicit-invocation/three-ui'
+import { attachDOMInput, bindPrefersColorScheme } from '@implicit-invocation/three-ui/web'
+import { createThreeUIRoot } from '@implicit-invocation/three-ui-react'
 import { bootRenderer, loop, registerInterFonts } from 'example-shared'
 import { App } from './App'
 

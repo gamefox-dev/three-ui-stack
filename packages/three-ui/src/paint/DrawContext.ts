@@ -1,4 +1,4 @@
-import type { Affine2, BitmapFont, Color4, ColorLike, GlyphLayout, NinePatch, Rect, TextureRegion } from 'three-2d'
+import type { Affine2, BitmapFont, Color4, ColorLike, GlyphLayout, NinePatch, Rect, TextureRegion } from '@implicit-invocation/three-2d'
 
 export interface RectPaint {
   color?: Color4
@@ -30,7 +30,7 @@ export interface TextPaint {
   fontSize: number
 }
 
-/** Logical painter used by every node. The concrete implementation translates these to `three-2d` batches. */
+/** Logical painter used by every node. The concrete implementation translates these to `@implicit-invocation/three-2d` batches. */
 export interface UIDrawContext {
   rect(rect: Rect, paint: RectPaint): void
   image(region: TextureRegion, rect: Rect, paint?: ImagePaint): void

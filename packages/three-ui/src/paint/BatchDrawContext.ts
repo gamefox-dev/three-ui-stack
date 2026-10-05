@@ -1,4 +1,4 @@
-import { Color4, TextureRegion, type Affine2, type BatchSegment, type GlyphLayout, type NinePatch, type PolygonSpriteBatch, type Rect } from 'three-2d'
+import { Color4, TextureRegion, type Affine2, type BatchSegment, type GlyphLayout, type NinePatch, type PolygonSpriteBatch, type Rect } from '@implicit-invocation/three-2d'
 import type { ImagePaint, NinePatchPaint, RectPaint, TextPaint, UIDrawContext } from './DrawContext'
 
 export interface PaintCounters {
@@ -8,7 +8,7 @@ export interface PaintCounters {
 const WHITE = new Color4(1, 1, 1, 1)
 
 /**
- * `UIDrawContext` backed by a `three-2d` batch. Every UI primitive becomes quads in the batch's
+ * `UIDrawContext` backed by a `@implicit-invocation/three-2d` batch. Every UI primitive becomes quads in the batch's
  * dynamic buffer — nodes never own Three objects.
  */
 export class BatchDrawContext implements UIDrawContext {

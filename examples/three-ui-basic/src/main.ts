@@ -1,6 +1,6 @@
-import { AnimatedImage, Image, NinePatchView, ScrollView, Text, View, createThreeUI, type Style, type UINode, type UIPointerEvent } from 'three-ui'
-import { attachDOMInput } from 'three-ui/web'
-import { Animation } from 'three-2d'
+import { AnimatedImage, Image, NinePatchView, ScrollView, Text, View, createThreeUI, type Style, type UINode, type UIPointerEvent } from '@implicit-invocation/three-ui'
+import { attachDOMInput } from '@implicit-invocation/three-ui/web'
+import { Animation } from '@implicit-invocation/three-2d'
 import { FpsMeter, bootRenderer, loop, makeAvatar, makeLandscape, makeNinePatch, makeWalkCycle, registerInterFonts } from 'example-shared'
 
 const canvas = document.getElementById('c') as HTMLCanvasElement
@@ -188,7 +188,7 @@ const header = new View({
   style: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   children: [
     new View({
-      children: [new Text({ text: 'three-ui', style: { fontSize: 30, fontWeight: 700 } }), bind(new Text({ text: 'retained UI · Yoga flexbox · no React · no DOM' }), (p) => ({ fontSize: 13, color: p.muted }))],
+      children: [new Text({ text: '@implicit-invocation/three-ui', style: { fontSize: 30, fontWeight: 700 } }), bind(new Text({ text: 'retained UI · Yoga flexbox · no React · no DOM' }), (p) => ({ fontSize: 13, color: p.muted }))],
     }),
     new View({ style: { alignItems: 'flex-end', gap: 2 }, children: [new Text({ text: boot.backend, style: { fontWeight: 700, color: '#fbbf24' } }), stats] }),
   ],

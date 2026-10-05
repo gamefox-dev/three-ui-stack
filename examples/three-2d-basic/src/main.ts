@@ -9,9 +9,9 @@ import {
   Three2D,
   type BatchDrawOptions,
   type Viewport,
-} from 'three-2d'
-import { packBitmapFont } from 'three-2d-font'
-import type { BitmapFont } from 'three-2d'
+} from '@implicit-invocation/three-2d'
+import { packBitmapFont } from '@implicit-invocation/three-2d-font'
+import type { BitmapFont } from '@implicit-invocation/three-2d'
 import { FpsMeter, bootRenderer, loadBitmapFont, loop, makeGemAtlas, makeNinePatch, makeWalkCycle } from 'example-shared'
 
 const canvas = document.getElementById('c') as HTMLCanvasElement
@@ -147,7 +147,7 @@ const g: Three2D = graphics
 const drawFrame = (b: Parameters<Parameters<Three2D['render']>[0]>[0]) => {
   // world backdrop shows the viewport rectangle (bars appear outside it for Fit/Fill)
   b.fillRect(0, 0, g.viewport.worldWidth, g.viewport.worldHeight, { color: '#0d0d14' })
-  text(b, 'three-2d', 24, 18, 40, '#ffffff', true)
+  text(b, '@implicit-invocation/three-2d', 24, 18, 40, '#ffffff', true)
   text(b, 'batched sprites · atlas · animation · bitmap fonts · nine-patch · particles · viewports', 26, 64, 15, '#a1a1aa')
   text(b, `${boot.backend} · ${g.viewport.constructor.name}`, 26, 86, 13, '#71717a')
 

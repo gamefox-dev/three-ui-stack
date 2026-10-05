@@ -30,7 +30,7 @@ const packed = new Map<string, string>()
 
 for (const pkg of packages) {
   const out = run('bun', ['pm', 'pack', '--destination', tarballs], pkg.dir, `bun pm pack (${pkg.name})`)
-  const file = join(tarballs, `${pkg.name}-${pkg.version}.tgz`)
+  const file = join(tarballs, `${pkg.name.replace(/^@/, '').replace('/', '-')}-${pkg.version}.tgz`)
   if (!existsSync(file)) {
     fail(`${pkg.name}: tarball not produced`)
     continue

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { UIStats } from 'three-ui'
-import { ScrollView, Text, View, useThreeUI } from 'three-ui-react'
+import type { UIStats } from '@implicit-invocation/three-ui'
+import { ScrollView, Text, View, useThreeUI } from '@implicit-invocation/three-ui-react'
 import { Button, Card, Chip, Label, PageTitle, Row, Slider, Switch, useAnimationFrame, useInterval } from '../kit'
 
 const FIELDS: [keyof UIStats, string][] = [

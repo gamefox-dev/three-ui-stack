@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import { Text, View, useThreeUI, type UIPointerEvent } from 'three-ui-react'
+import { Text, View, useThreeUI, type UIPointerEvent } from '@implicit-invocation/three-ui-react'
 
 // Every Tailwind class below is a complete literal token so the build-time scanner can see it.
 

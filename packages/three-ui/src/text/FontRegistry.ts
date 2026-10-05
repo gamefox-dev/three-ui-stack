@@ -1,4 +1,4 @@
-import type { BitmapFont } from 'three-2d'
+import type { BitmapFont } from '@implicit-invocation/three-2d'
 import { warnOnce } from '../dev'
 
 const GENERIC_FAMILIES: ReadonlySet<string> = new Set(['system-ui', 'ui-sans-serif', 'sans-serif', 'serif', 'monospace', 'ui-monospace', 'ui-serif', '-apple-system', 'inherit', ''])

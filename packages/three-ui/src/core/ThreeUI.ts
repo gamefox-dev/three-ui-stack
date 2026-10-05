@@ -1,4 +1,4 @@
-import { PolygonSpriteBatch, createOrthographicCamera, updateOrthographicCamera, Color4, parseColor, type BatchRenderer, type ColorLike, type Disposable } from 'three-2d'
+import { PolygonSpriteBatch, createOrthographicCamera, updateOrthographicCamera, Color4, parseColor, type BatchRenderer, type ColorLike, type Disposable } from '@implicit-invocation/three-2d'
 import { Color, SRGBColorSpace, Scene, type OrthographicCamera } from 'three'
 import { createEnvironment, type UIEnvironment } from '../env'
 import { InputManager } from '../input/InputManager'

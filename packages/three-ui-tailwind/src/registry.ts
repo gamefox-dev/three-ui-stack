@@ -1,4 +1,4 @@
-import type { Style } from 'three-ui'
+import type { Style } from '@implicit-invocation/three-ui'
 
 /** Interaction / environment conditions a rule applies under. All conditions of a rule must hold. */
 export type Condition =

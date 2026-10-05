@@ -6,7 +6,7 @@ export type { YogaNode, YogaConfig }
 export { YGEnums }
 
 /**
- * Internal Yoga binding contract. `three-ui`'s public API is Yoga-specific, but the binary/runtime that
+ * Internal Yoga binding contract. `@implicit-invocation/three-ui`'s public API is Yoga-specific, but the binary/runtime that
  * implements it is swappable: the default is a synchronous asm.js build derived from the same Yoga release
  * as `yoga-layout` (Hermes-safe, no `WebAssembly`). Any object with the shape of `yoga-layout`'s default
  * export also satisfies it, so a browser-only WASM backend can be plugged in with `setYogaRuntime`.

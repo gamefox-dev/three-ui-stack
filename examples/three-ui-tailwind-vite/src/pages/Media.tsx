@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { AnimatedImage, Image, NinePatch, Text, View } from 'three-ui-react'
-import { Animation } from 'three-2d'
+import { AnimatedImage, Image, NinePatch, Text, View } from '@implicit-invocation/three-ui-react'
+import { Animation } from '@implicit-invocation/three-2d'
 import { makeAvatar, makeGemAtlas, makeLandscape, makeNinePatch, makeWalkCycle } from 'example-shared'
 import { Button, Card, Label, PageTitle, Row, Slider, useAnimationFrame } from '../kit'
 

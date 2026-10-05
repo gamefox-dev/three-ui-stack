@@ -12,8 +12,8 @@
   "dependencies": {
     "example-shared": "workspace:^",
     "three": "catalog:",
-    "three-2d": "workspace:^",
-    "three-2d-font": "workspace:^"
+    "@implicit-invocation/three-2d": "workspace:^",
+    "@implicit-invocation/three-2d-font": "workspace:^"
   },
   "devDependencies": {
     "@types/three": "catalog:",

@@ -3,10 +3,10 @@ import { PixelRatio, View as RNView, type LayoutChangeEvent } from 'react-native
 import { Canvas, type CanvasRef } from 'react-native-webgpu'
 import { Asset } from 'expo-asset'
 import * as THREE from 'three/webgpu'
-import { Three2D, TextureRegion, configureTexture } from 'three-2d'
-import { packBitmapFont } from 'three-2d-font'
-import { createThreeUI, FontRegistry, type ThreeUI } from 'three-ui'
-import { createThreeUIRoot, type ThreeUIRoot } from 'three-ui-react'
+import { Three2D, TextureRegion, configureTexture } from '@implicit-invocation/three-2d'
+import { packBitmapFont } from '@implicit-invocation/three-2d-font'
+import { createThreeUI, FontRegistry, type ThreeUI } from '@implicit-invocation/three-ui'
+import { createThreeUIRoot, type ThreeUIRoot } from '@implicit-invocation/three-ui-react'
 import { Demo } from './Demo'
 
 /**

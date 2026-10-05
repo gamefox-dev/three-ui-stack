@@ -1,5 +1,5 @@
 import type { Texture } from 'three'
-import { TextureRegion, fullRegion } from 'three-2d'
+import { TextureRegion, fullRegion } from '@implicit-invocation/three-2d'
 import type { UIDrawContext } from '../paint/DrawContext'
 import { YGEnums as E } from '../yoga/runtime'
 import { paintBox } from './paintBox'

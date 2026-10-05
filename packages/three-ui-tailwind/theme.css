@@ -2,7 +2,7 @@
  * three-ui-tailwind — optional theme defaults for three-ui.
  *
  *   @import "tailwindcss";
- *   @import "three-ui-tailwind";
+ *   @import "@implicit-invocation/three-ui-tailwind";
  *
  *   @theme { --color-primary: #6d5dfc; --font-ui: Inter; --spacing: 4px; }
  *

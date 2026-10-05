@@ -18,11 +18,11 @@ bun run build:packages
   `workspace:^` in package manifests; `bun pm pack` rewrites both before publication.
 - Examples (`examples/*`) are private, consume packages through their normal `exports`, and are never published.
 - `bun run check:boundaries` fails on architecture violations (see the root README). Keep core packages DOM-free; web-only
-  code goes in clearly named adapters (`three-ui/src/web.ts`).
+  code goes in clearly named adapters (`@implicit-invocation/three-ui/src/web.ts`).
 
 ## Yoga asm.js
 
-`yoga-layout@3.x` is WebAssembly-only. `three-ui` ships an asm.js build derived from the same release:
+`yoga-layout@3.x` is WebAssembly-only. `@implicit-invocation/three-ui` ships an asm.js build derived from the same release:
 
 ```bash
 bun run build:yoga-asm                    # regenerate packages/three-ui/src/yoga/generated/*
@@ -48,8 +48,8 @@ fixtures in `test/fixtures/layouts`) and that the asm build initializes with the
 
 ### npm names
 
-Before the first publish verify availability of every name. At the time of writing `three-2d`, `three-2d-font`,
-`three-ui-react` and `three-ui-tailwind` are free but **`three-ui` is already taken** on the public registry (a different,
+Before the first publish verify availability of every name. At the time of writing `@implicit-invocation/three-2d`, `@implicit-invocation/three-2d-font`,
+`@implicit-invocation/three-ui-react` and `@implicit-invocation/three-ui-tailwind` are free but **`@implicit-invocation/three-ui` is already taken** on the public registry (a different,
 unrelated project). Package names are intentionally *not* renamed in the repo; resolve this (scope, rename or transfer)
 before publishing and document the decision here.
 

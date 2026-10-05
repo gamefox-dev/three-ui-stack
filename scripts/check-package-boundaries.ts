@@ -16,23 +16,23 @@ interface Rule {
 
 const DOM = /\b(window\.|document\.|HTMLElement|HTMLCanvasElement|CanvasRenderingContext2D|OffscreenCanvas|navigator\.|requestAnimationFrame|new Image\(\)|getContext\()/
 const rules: Record<string, Rule> = {
-  'three-2d': {
-    forbidImports: ['three-ui', 'three-2d-font', 'react', 'tailwindcss', 'yoga-layout', 'node:'],
+  '@implicit-invocation/three-2d': {
+    forbidImports: ['@implicit-invocation/three-ui', '@implicit-invocation/three-2d-font', 'react', 'tailwindcss', 'yoga-layout', 'node:'],
     forbidSource: [
       { re: DOM, why: 'DOM / Canvas2D / rAF in core runtime' },
       { re: /new ShaderMaterial\(/, why: 'ShaderMaterial (portable shaders must be TSL/NodeMaterial)' },
       { re: /\bWebGLRenderer\b|\bnew WebGPURenderer\b/, why: 'creating a renderer (caller owns the renderer)' },
     ],
   },
-  'three-2d-font': {
-    forbidImports: ['three-ui', 'react', 'tailwindcss'],
+  '@implicit-invocation/three-2d-font': {
+    forbidImports: ['@implicit-invocation/three-ui', 'react', 'tailwindcss'],
     forbidSource: [
       { re: DOM, why: 'DOM / Canvas2D in the portable font path' },
       { re: /\bnode:/, why: 'node: imports outside the node entry', allowIn: /src\/(node|cli)\.ts$/ },
     ],
   },
-  'three-ui': {
-    forbidImports: ['react', 'react-reconciler', 'three-ui-react', 'three-ui-tailwind', 'tailwindcss', '@tailwindcss', 'node:'],
+  '@implicit-invocation/three-ui': {
+    forbidImports: ['react', 'react-reconciler', '@implicit-invocation/three-ui-react', '@implicit-invocation/three-ui-tailwind', 'tailwindcss', '@tailwindcss', 'node:'],
     forbidSource: [
       { re: DOM, why: 'DOM in core runtime (web adapters live in src/web.ts)', allowIn: /src\/web\.ts$/ },
       { re: /\bWebAssembly\b/, why: 'browser WebAssembly (Yoga must run under Hermes via asm.js)' },
@@ -40,14 +40,14 @@ const rules: Record<string, Rule> = {
       { re: /from ['"]yoga-layout['"]/, why: 'importing the WASM yoga-layout at runtime' },
     ],
   },
-  'three-ui-react': {
-    forbidImports: ['react-dom', 'three-ui-tailwind', 'tailwindcss'],
+  '@implicit-invocation/three-ui-react': {
+    forbidImports: ['react-dom', '@implicit-invocation/three-ui-tailwind', 'tailwindcss'],
     forbidSource: [
       { re: DOM, why: 'DOM in React adapter' },
       { re: /from ['"]react-reconciler/, why: 'react-reconciler outside src/renderer', allowIn: /src\/renderer\// },
     ],
   },
-  'three-ui-tailwind': {
+  '@implicit-invocation/three-ui-tailwind': {
     forbidImports: ['react-dom'],
     forbidSource: [
       { re: /(tailwindcss|@tailwindcss\/[a-z-]+)\/(dist|src|lib)\//, why: 'deep import of Tailwind internals' },
@@ -59,11 +59,11 @@ const rules: Record<string, Rule> = {
 
 // allowed workspace dependency direction
 const allowedWorkspaceDeps: Record<string, string[]> = {
-  'three-2d': [],
-  'three-2d-font': ['three-2d'],
-  'three-ui': ['three-2d'],
-  'three-ui-react': ['three-ui', 'three-2d'],
-  'three-ui-tailwind': ['three-ui', 'three-ui-react'],
+  '@implicit-invocation/three-2d': [],
+  '@implicit-invocation/three-2d-font': ['@implicit-invocation/three-2d'],
+  '@implicit-invocation/three-ui': ['@implicit-invocation/three-2d'],
+  '@implicit-invocation/three-ui-react': ['@implicit-invocation/three-ui', '@implicit-invocation/three-2d'],
+  '@implicit-invocation/three-ui-tailwind': ['@implicit-invocation/three-ui', '@implicit-invocation/three-ui-react'],
 }
 
 const importRe = /(?:import|export)\s+(?:type\s+)?(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/g
@@ -104,8 +104,8 @@ for (const pkg of listPackages()) {
   const allowed = allowedWorkspaceDeps[pkg.name]
   if (!allowed) continue
   for (const dep of Object.keys({ ...pkg.manifest.dependencies, ...pkg.manifest.peerDependencies })) {
-    if (dep.startsWith('three-') && !allowed.includes(dep)) fail(`${pkg.name}/package.json depends on ${dep}, violating the dependency graph`)
+    if (dep.startsWith('@implicit-invocation/') && !allowed.includes(dep)) fail(`${pkg.name}/package.json depends on ${dep}, violating the dependency graph`)
   }
-  if (pkg.name === 'three-ui') for (const bad of ['react', 'react-reconciler', 'tailwindcss']) if (pkg.manifest.dependencies?.[bad] || pkg.manifest.peerDependencies?.[bad]) fail(`three-ui must not depend on ${bad}`)
+  if (pkg.name === '@implicit-invocation/three-ui') for (const bad of ['react', 'react-reconciler', 'tailwindcss']) if (pkg.manifest.dependencies?.[bad] || pkg.manifest.peerDependencies?.[bad]) fail(`three-ui must not depend on ${bad}`)
 }
 finish('check:boundaries')

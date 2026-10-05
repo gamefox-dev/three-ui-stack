@@ -1,4 +1,4 @@
-import { Color4, parseColor } from 'three-2d'
+import { Color4, parseColor } from '@implicit-invocation/three-2d'
 import { INHERITED_KEYS, type AlignValue, type FlexDirection, type FlexWrap, type JustifyValue, type Length, type NonAutoLength, type Overflow, type Style, type StyleProp, type TextAlign, type TransformOp } from './types'
 
 /** Fully resolved style. This — not Yoga — is the source of truth for layout, paint and text. */

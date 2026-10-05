@@ -12,7 +12,7 @@ import {
   type Style,
   type UIEnvironment,
   type UINode,
-} from 'three-ui'
+} from '@implicit-invocation/three-ui'
 import type { Condition, RegistryRule, TailwindRegistry } from './registry'
 
 interface Plan {

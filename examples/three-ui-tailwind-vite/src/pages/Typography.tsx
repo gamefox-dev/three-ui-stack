@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Text, View } from 'three-ui-react'
+import { Text, View } from '@implicit-invocation/three-ui-react'
 import { Card, Label, PageTitle, Row, Segmented, Slider } from '../kit'
 
 const ALIGN = { left: 'text-left', center: 'text-center', right: 'text-right' } as const

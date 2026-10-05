@@ -1,11 +1,18 @@
 {
-  "name": "three-ui-react",
+  "name": "@implicit-invocation/three-ui-react",
   "version": "0.1.0",
   "description": "React renderer (react-reconciler, mutation mode) for three-ui. No React DOM required.",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
-  "keywords": ["react", "react-reconciler", "three", "ui", "webgpu", "react-native"],
+  "keywords": [
+    "react",
+    "react-reconciler",
+    "three",
+    "ui",
+    "webgpu",
+    "react-native"
+  ],
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -17,7 +24,11 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "vite build && tsc -p tsconfig.build.json",
     "dev": "bun run build && vite build --watch --emptyOutDir=false",
@@ -26,8 +37,8 @@
   },
   "dependencies": {
     "react-reconciler": "catalog:",
-    "three-2d": "workspace:^",
-    "three-ui": "workspace:^"
+    "@implicit-invocation/three-2d": "workspace:^",
+    "@implicit-invocation/three-ui": "workspace:^"
   },
   "peerDependencies": {
     "react": "catalog:",
@@ -42,5 +53,8 @@
     "three": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

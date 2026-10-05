@@ -6,5 +6,5 @@ export default defineLibraryConfig({
     index: resolve(import.meta.dirname, 'src/index.ts'),
     web: resolve(import.meta.dirname, 'src/web.ts'),
   },
-  external: [externalPackage('three'), externalPackage('three-2d')],
+  external: [externalPackage('three'), externalPackage('@implicit-invocation/three-2d')],
 })

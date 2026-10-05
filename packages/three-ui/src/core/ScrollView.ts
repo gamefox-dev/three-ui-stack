@@ -1,4 +1,4 @@
-import { Color4 } from 'three-2d'
+import { Color4 } from '@implicit-invocation/three-2d'
 import type { UIDrawContext } from '../paint/DrawContext'
 import type { Style } from '../style/types'
 import { YGEnums as E } from '../yoga/runtime'

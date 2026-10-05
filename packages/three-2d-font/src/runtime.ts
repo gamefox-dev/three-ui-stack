@@ -1,5 +1,5 @@
 import { DataTexture, RGBAFormat, UnsignedByteType } from 'three'
-import { BitmapFont, BitmapFontData, configureTexture } from 'three-2d'
+import { BitmapFont, BitmapFontData, configureTexture } from '@implicit-invocation/three-2d'
 import { bakeBitmapFont, type BakeOptions, type BakedBitmapFont } from './bake'
 import { CpuGlyphRasterizer } from './rasterizer/CpuGlyphRasterizer'
 import { ThreeGlyphRasterizer, type GlyphRasterizerRenderer } from './rasterizer/ThreeGlyphRasterizer'

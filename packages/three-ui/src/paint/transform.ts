@@ -1,4 +1,4 @@
-import type { Affine2 } from 'three-2d'
+import type { Affine2 } from '@implicit-invocation/three-2d'
 import type { TransformOp } from '../style/types'
 
 function angle(v: number | `${number}deg` | `${number}rad`): number {

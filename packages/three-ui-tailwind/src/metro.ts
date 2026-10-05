@@ -58,7 +58,7 @@ export function withThreeUITailwind<C extends MetroConfigLike>(config: C, option
   )
   if (run.status !== 0) throw new Error('[three-ui-tailwind] Tailwind compilation failed (see output above)')
 
-  writeFileSync(registerFile, `import registry from './registry.js'\nimport { registerTailwind } from 'three-ui-tailwind'\nexport const resolver = registerTailwind(registry)\nexport default resolver\n`)
+  writeFileSync(registerFile, `import registry from './registry.js'\nimport { registerTailwind } from '@implicit-invocation/three-ui-tailwind'\nexport const resolver = registerTailwind(registry)\nexport default resolver\n`)
 
   const previous = config.resolver?.resolveRequest ?? null
   return {

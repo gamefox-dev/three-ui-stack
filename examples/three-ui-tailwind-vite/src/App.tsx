@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Image, ScrollView, Text, View, useThreeUI } from 'three-ui-react'
+import { Image, ScrollView, Text, View, useThreeUI } from '@implicit-invocation/three-ui-react'
 import { makeAvatar } from 'example-shared'
 import { Button } from './kit'
 import { Interaction } from './pages/Interaction'

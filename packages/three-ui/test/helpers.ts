@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { DataTexture, RGBAFormat, UnsignedByteType } from 'three'
-import { BitmapFont, BitmapFontData, configureTexture } from 'three-2d'
+import { BitmapFont, BitmapFontData, configureTexture } from '@implicit-invocation/three-2d'
 import { FontRegistry, createThreeUI, type ThreeUI, type ThreeUIOptions } from '../src'
 
 const fontDir = resolve(import.meta.dirname, '../../../test/fixtures/public/fonts')

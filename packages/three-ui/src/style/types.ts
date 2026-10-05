@@ -1,4 +1,4 @@
-import type { ColorLike } from 'three-2d'
+import type { ColorLike } from '@implicit-invocation/three-2d'
 
 export type Length = number | `${number}%` | 'auto'
 /** Length that cannot be `auto` (padding, max sizes, gaps). */

@@ -60,6 +60,6 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "three-2d-font": "workspace:^"
+    "@implicit-invocation/three-2d-font": "workspace:^"
   }
 }

@@ -18,10 +18,10 @@
     "react-native": "0.86.3",
     "react-native-webgpu": "0.5.17",
     "three": "catalog:",
-    "three-2d": "workspace:^",
-    "three-2d-font": "workspace:^",
-    "three-ui": "workspace:^",
-    "three-ui-react": "workspace:^"
+    "@implicit-invocation/three-2d": "workspace:^",
+    "@implicit-invocation/three-2d-font": "workspace:^",
+    "@implicit-invocation/three-ui": "workspace:^",
+    "@implicit-invocation/three-ui-react": "workspace:^"
   },
   "devDependencies": {
     "@types/react": "~19.2.0",

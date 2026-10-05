@@ -7,5 +7,5 @@ export default defineLibraryConfig({
     node: resolve(import.meta.dirname, 'src/node.ts'),
     cli: resolve(import.meta.dirname, 'src/cli.ts'),
   },
-  external: [externalPackage('three'), externalPackage('three-2d'), externalPackage('opentype.js'), /^node:/],
+  external: [externalPackage('three'), externalPackage('@implicit-invocation/three-2d'), externalPackage('opentype.js'), /^node:/],
 })

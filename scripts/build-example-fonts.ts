@@ -1,9 +1,9 @@
 /**
  * Bakes the prebuilt bitmap-font fixtures used by the examples (and tests) from the Inter TTFs in
- * test/fixtures/fonts, using the real `three-2d-font` package. Run: `bun run build:fonts`.
+ * test/fixtures/fonts, using the real `@implicit-invocation/three-2d-font` package. Run: `bun run build:fonts`.
  */
 import { resolve } from 'node:path'
-import { packFontFile } from 'three-2d-font/node'
+import { packFontFile } from '@implicit-invocation/three-2d-font/node'
 
 const root = resolve(import.meta.dirname, '..')
 const fonts = [

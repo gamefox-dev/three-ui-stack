@@ -3,7 +3,7 @@
   "changelog": "@changesets/cli/changelog",
   "commit": false,
   "fixed": [],
-  "linked": [["three-2d", "three-2d-font", "three-ui", "three-ui-react", "three-ui-tailwind"]],
+  "linked": [["@implicit-invocation/three-2d", "@implicit-invocation/three-2d-font", "@implicit-invocation/three-ui", "@implicit-invocation/three-ui-react", "@implicit-invocation/three-ui-tailwind"]],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",

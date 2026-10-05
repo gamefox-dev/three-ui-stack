@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
-import type { View as ViewNode } from 'three-ui'
-import { Text, View } from 'three-ui-react'
+import type { View as ViewNode } from '@implicit-invocation/three-ui'
+import { Text, View } from '@implicit-invocation/three-ui-react'
 import { Button, Card, Label, PageTitle, Row, Segmented, Slider } from '../kit'
 
 const DIRECTION = { row: 'flex-row', col: 'flex-col', 'row-reverse': 'flex-row-reverse', 'col-reverse': 'flex-col-reverse' } as const

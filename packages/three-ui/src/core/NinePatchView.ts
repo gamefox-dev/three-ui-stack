@@ -1,4 +1,4 @@
-import type { NinePatch } from 'three-2d'
+import type { NinePatch } from '@implicit-invocation/three-2d'
 import type { UIDrawContext } from '../paint/DrawContext'
 import type { Style } from '../style/types'
 import { STYLE_DIRTY } from './flags'

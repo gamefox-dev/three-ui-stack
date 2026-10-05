@@ -1,6 +1,6 @@
 # three-2d-basic
 
-Vite + plain TypeScript (no React, no UI layer) showcasing **`three-2d`** on Three's WebGPU renderer (WebGL2 fallback).
+Vite + plain TypeScript (no React, no UI layer) showcasing **`@implicit-invocation/three-2d`** on Three's WebGPU renderer (WebGL2 fallback).
 
 ```bash
 bun run dev        # http://localhost:5171   (append ?webgl to force the WebGL2 backend)

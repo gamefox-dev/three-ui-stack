@@ -1,4 +1,4 @@
-import type { Style, TransformOp } from 'three-ui'
+import type { Style, TransformOp } from '@implicit-invocation/three-ui'
 import { evalCalc, parseCssColor, parseQuantity, resolveVars, rgbaToHex, splitTopLevel, toLength, type VarMap } from './values'
 
 export interface ConvertResult {
@@ -81,7 +81,7 @@ function words(value: string): string[] {
 }
 
 /**
- * Convert the declarations of one Tailwind rule into a `three-ui` `Style`.
+ * Convert the declarations of one Tailwind rule into a `@implicit-invocation/three-ui` `Style`.
  * Unsupported properties/values produce warnings (never silent nonsense).
  */
 export function convertDeclarations(decls: readonly Decl[], globals: VarMap, token: string): ConvertResult {

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
-import type { ScrollView as ScrollNode } from 'three-ui'
-import { Image, ScrollView, Text, View, useThreeUI } from 'three-ui-react'
+import type { ScrollView as ScrollNode } from '@implicit-invocation/three-ui'
+import { Image, ScrollView, Text, View, useThreeUI } from '@implicit-invocation/three-ui-react'
 import { makeAvatar } from 'example-shared'
 import { Button, Card, Chip, PageTitle, Row, useInterval } from '../kit'
 

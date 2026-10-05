@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "three": "catalog:",
-    "three-2d": "workspace:^",
-    "three-ui": "workspace:^"
+    "@implicit-invocation/three-2d": "workspace:^",
+    "@implicit-invocation/three-ui": "workspace:^"
   },
   "devDependencies": {
     "@types/three": "catalog:",

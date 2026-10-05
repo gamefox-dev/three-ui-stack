@@ -3,7 +3,7 @@
  *
  *   bun run release              # check + pack:smoke + publish (latest)
  *   bun run release:next         # same, `--tag next`
- *   bun scripts/publish-packages.ts --dry-run [--tag next] [--skip-existing]
+ *   bun scripts/publish-packages.ts --dry-run [--tag next] [--skip-existing] [--otp <code>]
  *
  * NEVER run without explicit maintainer approval: it publishes to the npm registry.
  *
@@ -27,6 +27,7 @@ const option = (name: string): string | undefined => {
   return i >= 0 ? args[i + 1] : undefined
 }
 const tag = option('--tag')
+const otp = option('--otp') ?? process.env.NPM_CONFIG_OTP
 const dryRun = flag('--dry-run')
 const skipExisting = flag('--skip-existing')
 const registry = (process.env.npm_config_registry ?? 'https://registry.npmjs.org').replace(/\/$/, '')
@@ -77,7 +78,7 @@ try {
       console.log(`↷ ${p.name}@${p.version} already on the registry — skipped`)
       continue
     }
-    const publishArgs = ['publish', p.file, '--access', 'public', ...(tag ? ['--tag', tag] : []), ...(dryRun ? ['--dry-run'] : [])]
+    const publishArgs = ['publish', p.file, '--access', 'public', ...(tag ? ['--tag', tag] : []), ...(otp ? ['--otp', otp] : []), ...(dryRun ? ['--dry-run'] : [])]
     console.log(`→ bun ${publishArgs.join(' ')}`)
     sh('bun', publishArgs, root) // bun needs a package.json in cwd even when publishing a tarball
     console.log(`✓ ${dryRun ? 'dry-run ' : ''}${p.name}@${p.version}`)

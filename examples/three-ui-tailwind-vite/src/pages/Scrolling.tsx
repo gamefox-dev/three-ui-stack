@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useMemo, useRef, useState } from 'react'
+import type { TextureRegion } from '@implicit-invocation/three-2d'
 import type { ScrollView as ScrollNode } from '@implicit-invocation/three-ui'
 import { Image, ScrollView, Text, View, useThreeUI } from '@implicit-invocation/three-ui-react'
 import { makeAvatar } from 'example-shared'
@@ -6,12 +7,29 @@ import { Button, Card, Chip, PageTitle, Row, useInterval } from '../kit'
 
 const NAMES = ['Ada', 'Grace', 'Linus', 'Margaret', 'Dennis', 'Barbara', 'Ken', 'Radia', 'Alan', 'Hedy', 'Tim', 'Frances']
 
+/** Memoized so scrolling (which updates the scrollY chip) doesn't re-render all 1 000 rows. */
+const PersonRow = memo(function PersonRow({ i, count, selected, avatar, onSelect }: { i: number; count: number; selected: boolean; avatar: TextureRegion; onSelect: (i: number) => void }) {
+  return (
+    <View
+      onClick={() => onSelect(i)}
+      className={`${selected ? 'bg-violet-600 text-white' : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700'} flex-row items-center gap-3 p-2 rounded-xl`}
+    >
+      <Image source={avatar} className="size-9 rounded-full" />
+      <View className="grow">
+        <Text className="text-sm font-bold">{`${NAMES[i % NAMES.length]} #${i + 1}`}</Text>
+        <Text className={`${selected ? 'text-violet-200' : 'text-zinc-500 dark:text-zinc-400'} text-xs`}>{`Row ${i + 1} of ${count}`}</Text>
+      </View>
+    </View>
+  )
+})
+
 export function Scrolling() {
   const ui = useThreeUI()
   const avatars = useMemo(() => Array.from({ length: 12 }, (_, i) => makeAvatar(i + 20)), [])
   const [count, setCount] = useState(1000)
   const [y, setY] = useState(0)
   const [selected, setSelected] = useState(-1)
+  const select = useCallback((i: number) => setSelected(i), [])
   const [culled, setCulled] = useState(0)
   const list = useRef<ScrollNode | null>(null)
   useInterval(() => setCulled(ui.stats.nodesCulled), 400)
@@ -33,17 +51,7 @@ export function Scrolling() {
         <Card title="VERTICAL LIST · wheel, drag, fling, PageUp/PageDown when focused" className="grow basis-72 min-h-64 h-96">
           <ScrollView ref={list} focusable onScroll={(_x, sy) => setY(sy)} className="flex-1 gap-1 pr-2 border-2 border-transparent focus:border-violet-500 rounded-xl">
             {Array.from({ length: count }, (_, i) => (
-              <View
-                key={i}
-                onClick={() => setSelected(i)}
-                className={`${selected === i ? 'bg-violet-600 text-white' : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700'} flex-row items-center gap-3 p-2 rounded-xl`}
-              >
-                <Image source={avatars[i % avatars.length]!} className="size-9 rounded-full" />
-                <View className="grow">
-                  <Text className="text-sm font-bold">{`${NAMES[i % NAMES.length]} #${i + 1}`}</Text>
-                  <Text className={`${selected === i ? 'text-violet-200' : 'text-zinc-500 dark:text-zinc-400'} text-xs`}>{`Row ${i + 1} of ${count}`}</Text>
-                </View>
-              </View>
+              <PersonRow key={i} i={i} count={count} selected={selected === i} avatar={avatars[i % avatars.length]!} onSelect={select} />
             ))}
           </ScrollView>
         </Card>

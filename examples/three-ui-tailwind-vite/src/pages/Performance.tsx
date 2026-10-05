@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import type { UIStats } from '@implicit-invocation/three-ui'
 import { ScrollView, Text, View, useThreeUI } from '@implicit-invocation/three-ui-react'
 import { Button, Card, Chip, Label, PageTitle, Row, Slider, Switch, useAnimationFrame, useInterval } from '../kit'
@@ -18,14 +18,38 @@ const FIELDS: [keyof UIStats, string][] = [
   ['nodesCulled', 'nodes culled'],
 ]
 
-export function Performance() {
+/** Own component + own interval: refreshing the numbers must not re-render the stress grid. */
+function LiveCounters() {
   const ui = useThreeUI()
   const [stats, setStats] = useState<UIStats>({ ...ui.stats })
+  useInterval(() => setStats({ ...ui.stats }), 300)
+  return (
+    <View className="flex-row flex-wrap gap-2">
+      {FIELDS.map(([k, label]) => (
+        <View key={k} className="bg-zinc-100 dark:bg-zinc-800 rounded-xl px-3 py-2 w-40">
+          <Text className="text-xs text-zinc-500 dark:text-zinc-400">{label}</Text>
+          <Text className="text-lg font-bold">{String(stats[k])}</Text>
+        </View>
+      ))}
+    </View>
+  )
+}
+
+const StressGrid = memo(function StressGrid({ count, size, hue }: { count: number; size: number; hue: number }) {
+  return (
+    <View className="flex-row flex-wrap gap-1">
+      {Array.from({ length: count }, (_, i) => (
+        <View key={i} style={{ width: size, height: size, backgroundColor: `hsl(${Math.round((i * 7 + hue) % 360)} 75% 55%)` }} className="rounded-md" />
+      ))}
+    </View>
+  )
+})
+
+export function Performance() {
   const [count, setCount] = useState(600)
   const [hue, setHue] = useState(0)
   const [size, setSize] = useState(24)
   const [animate, setAnimate] = useState(false)
-  useInterval(() => setStats({ ...ui.stats }), 300)
   useAnimationFrame((t) => setHue(t * 60), animate)
 
   return (
@@ -33,14 +57,7 @@ export function Performance() {
       <PageTitle title="Counters & stress" subtitle="Debug counters straight from the UI: watch what each kind of change costs. Paint-only changes skip Yoga; thousands of nodes still end up in a handful of draw calls." />
 
       <Card title="LIVE COUNTERS">
-        <View className="flex-row flex-wrap gap-2">
-          {FIELDS.map(([k, label]) => (
-            <View key={k} className="bg-zinc-100 dark:bg-zinc-800 rounded-xl px-3 py-2 w-40">
-              <Text className="text-xs text-zinc-500 dark:text-zinc-400">{label}</Text>
-              <Text className="text-lg font-bold">{String(stats[k])}</Text>
-            </View>
-          ))}
-        </View>
+        <LiveCounters />
       </Card>
 
       <Card title="INVALIDATION · compare the counters after each action">
@@ -59,11 +76,7 @@ export function Performance() {
 
       <Card title="STRESS GRID" className="h-96">
         <ScrollView className="flex-1">
-          <View className="flex-row flex-wrap gap-1">
-            {Array.from({ length: count }, (_, i) => (
-              <View key={i} style={{ width: size, height: size, backgroundColor: `hsl(${Math.round((i * 7 + hue) % 360)} 75% 55%)` }} className="rounded-md" />
-            ))}
-          </View>
+          <StressGrid count={count} size={size} hue={hue} />
         </ScrollView>
       </Card>
     </View>

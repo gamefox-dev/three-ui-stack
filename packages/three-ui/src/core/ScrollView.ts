@@ -158,9 +158,21 @@ export class ScrollView extends View {
   private handlePointerMove(e: UIPointerEvent): void {
     const press = this.press
     if (!press || e.pointerId !== press.pointerId) return
+    // A nested scroller that already owns this gesture consumed the event: do not fight it for pointer capture.
+    if (e.defaultPrevented && !press.dragging) {
+      this.press = null
+      return
+    }
     const p = this.pos(e)
     if (!press.dragging) {
-      if (Math.abs(p - press.startPos) < DRAG_THRESHOLD) return
+      const moved = p - press.startPos
+      if (Math.abs(moved) < DRAG_THRESHOLD) return
+      // Content follows the finger (scrolls by −moved). If we can't scroll that way (content fits, or we're at the
+      // end), leave the gesture to an outer scroller instead of swallowing it.
+      if (!this.canScrollAlong(-moved)) {
+        this.press = null
+        return
+      }
       press.dragging = true
       // from now on this ScrollView owns the gesture: children get pointercancel, no click fires
       this._ui?.input.setPointerCapture(e.pointerId, this, { cancelOthers: true })
@@ -174,6 +186,13 @@ export class ScrollView extends View {
     if (this._horizontal) this.scrollBy(-delta, 0)
     else this.scrollBy(0, -delta)
     e.preventDefault()
+  }
+
+  /** Can the scroll offset still move in direction `delta` (+ = towards the end) along this view's axis? */
+  private canScrollAlong(delta: number): boolean {
+    const pos = this._horizontal ? this.scrollX : this.scrollY
+    const max = this._horizontal ? this.maxScrollX : this.maxScrollY
+    return delta > 0 ? pos < max : pos > 0
   }
 
   private handlePointerUp(e: UIPointerEvent): void {

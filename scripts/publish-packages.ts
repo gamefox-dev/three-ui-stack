@@ -18,7 +18,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { listPackages, root, topoSort } from './lib'
+import { listPackages, topoSort } from './lib'
 
 const args = process.argv.slice(2)
 const flag = (name: string) => args.includes(name)
@@ -59,7 +59,7 @@ mkdirSync(tarballs)
 
 try {
   // 1–2: pack + validate everything before publishing anything
-  const staged: { name: string; version: string; file: string }[] = []
+  const staged: { name: string; version: string; file: string; dir: string }[] = []
   for (const pkg of packages) {
     if (!existsSync(join(pkg.dir, 'dist'))) die(`${pkg.name}: dist/ is missing — run \`bun run build:packages\` first`)
     sh('bun', ['pm', 'pack', '--destination', tarballs], pkg.dir)
@@ -69,7 +69,12 @@ try {
     for (const token of ['workspace:', 'catalog:']) {
       if (manifest.includes(token)) die(`${pkg.name}: packed manifest still contains "${token}" — refusing to publish`)
     }
-    staged.push({ name: pkg.name, version: pkg.version, file })
+    // Extract the validated tarball: `bun publish` resolves `bin`/`files` against the cwd's package.json, so publishing
+    // from the extracted package avoids false "bin ... does not exist" warnings.
+    const dir = join(work, 'extract', pkg.name.replace(/^@/, '').replace('/', '-'))
+    mkdirSync(dir, { recursive: true })
+    sh('tar', ['-xzf', file, '-C', dir], work)
+    staged.push({ name: pkg.name, version: pkg.version, file, dir: join(dir, 'package') })
   }
 
   // 3: publish in dependency order
@@ -80,7 +85,7 @@ try {
     }
     const publishArgs = ['publish', p.file, '--access', 'public', ...(tag ? ['--tag', tag] : []), ...(otp ? ['--otp', otp] : []), ...(dryRun ? ['--dry-run'] : [])]
     console.log(`→ bun ${publishArgs.join(' ')}`)
-    sh('bun', publishArgs, root) // bun needs a package.json in cwd even when publishing a tarball
+    sh('bun', publishArgs, p.dir) // bun needs a package.json in cwd even when publishing a tarball
     console.log(`✓ ${dryRun ? 'dry-run ' : ''}${p.name}@${p.version}`)
   }
 } finally {

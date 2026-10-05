@@ -218,6 +218,34 @@ describe('ScrollView', () => {
     expect(scroll.scrollY).toBe(settled)
   })
 
+  it('lets the innermost scroller own a drag; it hands over only when it cannot scroll that way', () => {
+    const ui = makeUI({ width: 300, height: 400 })
+    const innerItems = Array.from({ length: 10 }, () => new View({ style: { height: 50 } }))
+    const inner = new ScrollView({ name: 'inner', style: { height: 150 }, children: innerItems })
+    const filler = new View({ style: { height: 600 } })
+    const outer = new ScrollView({ name: 'outer', style: { flex: 1 }, children: [inner, filler] })
+    ui.setRoot(new View({ style: { flex: 1 }, children: [outer] }))
+    ui.update()
+    expect(outer.maxScrollY).toBeGreaterThan(0)
+
+    // drag up by 40px inside the inner list: only the inner scrolls, even across several moves
+    ui.input.pointerDown(50, 100, { timeStamp: 0 })
+    ui.input.pointerMove(50, 80, { timeStamp: 16 })
+    ui.input.pointerMove(50, 60, { timeStamp: 32 })
+    ui.input.pointerMove(50, 40, { timeStamp: 48 })
+    ui.input.pointerUp(50, 40, { timeStamp: 400 }) // stale → no fling
+    expect(inner.scrollY).toBeCloseTo(60)
+    expect(outer.scrollY).toBe(0)
+
+    // inner at its end: dragging further up hands the gesture to the outer scroller
+    inner.scrollTo(0, 1e9)
+    ui.input.pointerDown(50, 100, { timeStamp: 1000 })
+    ui.input.pointerMove(50, 80, { timeStamp: 1016 })
+    ui.input.pointerMove(50, 40, { timeStamp: 1032 })
+    ui.input.pointerUp(50, 40, { timeStamp: 1500 })
+    expect(outer.scrollY).toBeGreaterThan(0)
+  })
+
   it('scrolls horizontally and via keyboard when focused', () => {
     const ui = makeUI({ width: 300, height: 200 })
     const cells = Array.from({ length: 10 }, () => new View({ style: { width: 100, height: 40 } }))

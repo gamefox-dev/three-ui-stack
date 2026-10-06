@@ -4,6 +4,7 @@
  *
  *   bun scripts/build-pages.ts
  */
+import { spawnSync } from 'node:child_process'
 import { cpSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { root } from './lib'
@@ -19,12 +20,11 @@ rmSync(out, { recursive: true, force: true })
 for (const name of examples) {
   const dir = join(examplesDir, name)
   console.log(`\n▸ building ${name}`)
-  const proc = Bun.spawnSync(['bun', 'x', 'vite', 'build', '--base', './', '--outDir', join(out, 'examples', name), '--emptyOutDir'], {
+  const proc = spawnSync('bun', ['x', 'vite', 'build', '--base', './', '--outDir', join(out, 'examples', name), '--emptyOutDir'], {
     cwd: dir,
-    stdout: 'inherit',
-    stderr: 'inherit',
+    stdio: 'inherit',
   })
-  if (proc.exitCode !== 0) throw new Error(`vite build failed for ${name}`)
+  if (proc.status !== 0) throw new Error(`vite build failed for ${name}`)
 }
 
 cpSync(join(root, 'site'), out, { recursive: true })

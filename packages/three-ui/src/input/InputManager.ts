@@ -171,13 +171,16 @@ export class InputManager {
   pointerMove(x: number, y: number, init: PointerEventInit = {}): UIPointerEvent | null {
     const id = init.pointerId ?? MOUSE_ID
     const captured = this.captures.get(id)
-    const hit = this.hitTest(x, y)
+    const mouse = (init.pointerType ?? 'mouse') === 'mouse'
+    // Like Flutter, Android and DOM pointer capture: once a touch / pen pointer is captured its events go to the captured node and
+    // nothing under the finger is looked up again — a drag does no tree walk at all. (Only a mouse needs the node under it, for hover.)
+    const hit = captured && !mouse ? null : this.hitTest(x, y)
     const target = captured ?? hit
     if (!target) {
       this.updateHover([], x, y, init)
       return null
     }
-    if ((init.pointerType ?? 'mouse') === 'mouse') this.hoverTo(captured ? (hit ?? target) : target, x, y, init)
+    if (mouse) this.hoverTo(captured ? (hit ?? target) : target, x, y, init)
     if (this.isDisabledPath(target)) return null
     const e = new UIPointerEvent('pointermove', target, x, y, { ...init, pointerId: id })
     this.dispatch(e)
@@ -188,7 +191,8 @@ export class InputManager {
     const id = init.pointerId ?? MOUSE_ID
     const press = this.presses.get(id)
     const captured = this.captures.get(id)
-    const hit = this.hitTest(x, y)
+    // the node under the pointer only matters for a click, and a gesture that took over the pointer (drag-to-scroll) has none
+    const hit = captured && (press?.suppressClick ?? true) ? null : this.hitTest(x, y)
     const target = captured ?? hit ?? press?.target ?? null
     this.presses.delete(id)
     this.captures.delete(id)

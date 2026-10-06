@@ -1,5 +1,17 @@
 # @implicit-invocation/three-ui-tailwind
 
+## 0.8.0
+
+### Minor Changes
+
+- Pointer events of a captured touch / pen pointer no longer hit-test the node tree: like Flutter, Android and DOM pointer capture, the target is fixed once a node (a drag-scrolling `ScrollView`) captures the pointer, so a drag does no tree walk on any move or on the release. A mouse still looks under the pointer for hover, and an uncaptured press still resolves its click target. Adds `docs/scroll-profile.js`, a console snippet that profiles scrolling per direction.
+
+### Patch Changes
+
+- Updated dependencies
+  - @implicit-invocation/three-ui@0.8.0
+  - @implicit-invocation/three-ui-react@0.8.0
+
 ## 0.7.0
 
 ### Minor Changes

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ScrollView, Text, View, type UIEvent } from '../src'
 import { makeUI } from './helpers'
 
@@ -331,6 +331,23 @@ describe('ScrollView', () => {
       expect(scroll.scrollY).toBeLessThan(0) // overscrolling at the top
       ui.input.pointerUp(50, 40, { timeStamp: 600 })
     })
+  })
+
+  it('does no hit test while a touch drag owns the pointer (the target is fixed at the press, like Flutter / Android / DOM capture)', () => {
+    const { ui, scroll } = scrollSetup()
+    const hit = vi.spyOn(ui.input, 'hitTest')
+    const touch = { pointerId: 7, pointerType: 'touch' as const }
+    ui.input.pointerDown(50, 150, { ...touch, timeStamp: 0 })
+    ui.input.pointerMove(50, 130, { ...touch, timeStamp: 16 }) // crosses the drag threshold: the ScrollView captures the pointer
+    expect(scroll.scrollY).toBeGreaterThan(0)
+    const afterCapture = hit.mock.calls.length
+    for (let i = 3; i <= 12; i++) ui.input.pointerMove(50, 150 - i * 10, { ...touch, timeStamp: i * 16 })
+    ui.input.pointerUp(50, 30, { ...touch, timeStamp: 220 })
+    expect(hit.mock.calls.length).toBe(afterCapture) // no walk of the node tree for any later move or the release
+    expect(scroll.scrollY).toBeGreaterThan(100)
+    // a mouse still looks under the pointer (hover), a plain tap still resolves its click target
+    ui.input.pointerMove(50, 100, { pointerType: 'mouse' })
+    expect(hit.mock.calls.length).toBeGreaterThan(afterCapture)
   })
 
   it('lets the innermost scroller own a drag; it hands over only when it cannot scroll that way', () => {

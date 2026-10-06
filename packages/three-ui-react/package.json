@@ -1,6 +1,6 @@
 {
   "name": "@implicit-invocation/three-ui-react",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "React renderer (react-reconciler, mutation mode) for three-ui. No React DOM required.",
   "license": "MIT",
   "type": "module",

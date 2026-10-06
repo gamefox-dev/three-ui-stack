@@ -59,6 +59,7 @@ export class ScrollView extends View {
     this.addEventListener('pointerup', (e) => this.handlePointerUp(e))
     this.addEventListener('pointercancel', () => this.endPress(false))
     this.addEventListener('keydown', (e) => this.handleKey(e))
+    this.builtinListeners = this.listenerCount
   }
 
   get horizontal(): boolean {
@@ -80,6 +81,15 @@ export class ScrollView extends View {
   override get childOffsetY(): number {
     return -this.scrollY
   }
+
+  /** A scroll view that can actually scroll consumes presses (drag) and wheel, even without listeners. */
+  override get isInteractive(): boolean {
+    if (this.disabled || this.isDisposed) return false
+    // the scroll view's own gesture handlers do not make it interactive; scrollable content, focus or user listeners do
+    return this.focusable || this.maxScrollX > 0 || this.maxScrollY > 0 || this.listenerCount > this.builtinListeners
+  }
+
+  private builtinListeners = 0
 
   get maxScrollX(): number {
     return Math.max(0, this.contentWidth - this.layout.width)

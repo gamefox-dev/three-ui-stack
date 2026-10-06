@@ -390,6 +390,20 @@ export class ThreeUI implements Disposable {
     return this.input.hitTest(x, y)
   }
 
+  /**
+   * Nearest interactive node under a root-space point (focusable, has press / drag / wheel handlers, or a scrollable
+   * `ScrollView`), or `null`. Unlike `hitTest()` this ignores decorative nodes — use it to decide whether the UI should
+   * take a pointer press or let it fall through to the game.
+   */
+  hitTestInteractive(x: number, y: number): UINode | null {
+    return this.input.hitTestInteractive(x, y)
+  }
+
+  /** `hitTestInteractive(x, y) !== null`. */
+  isInteractiveAt(x: number, y: number): boolean {
+    return this.input.hitTestInteractive(x, y) !== null
+  }
+
   dispose(): void {
     if (this.disposed) return
     this.disposed = true

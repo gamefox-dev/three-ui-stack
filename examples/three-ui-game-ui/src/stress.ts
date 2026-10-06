@@ -11,7 +11,7 @@ export interface StressHandle {
  * style objects (no classes), laid out by Yoga and painted into the SAME batch as everything else. The point is to prove
  * the batching claim: draw calls stay at a handful no matter how many panels there are.
  */
-export function buildStress(ui: ThreeUI, parent: View, count: number, animate: boolean): StressHandle {
+export function buildStress(ui: ThreeUI, parent: View, count: number, animate: boolean, flat = false): StressHandle {
   const { width, height } = ui.environment.viewport
   const gap = count > 800 ? 4 : 8
   const pad = 14
@@ -46,11 +46,16 @@ export function buildStress(ui: ThreeUI, parent: View, count: number, animate: b
         colorSpace: 'oklab',
         stops: [{ color: `hsl(${hue} 90% 62%)` }, { color: `hsl(${(hue + 50) % 360} 85% 42%)` }],
       },
-      boxShadow: [
-        { offsetY: 1, blur: 0, spread: 0, color: '#ffffff55', inset: true },
-        { spread: 1, color: '#ffffff40' },
-        { offsetY: Math.max(2, size / 8), blur: Math.max(6, size / 3), color: '#00000099' },
-      ],
+      // `flat`: opaque panels only (gradient + radius), no translucent layers — used to compare renderers without blending-space effects
+      ...(flat
+        ? {}
+        : {
+            boxShadow: [
+              { offsetY: 1, blur: 0, spread: 0, color: '#ffffff55', inset: true },
+              { spread: 1, color: '#ffffff40' },
+              { offsetY: Math.max(2, size / 8), blur: Math.max(6, size / 3), color: '#00000099' },
+            ],
+          }),
     }
     const panel = new View({ style })
     if (size >= 36) panel.append(new Text({ text: String(i + 1), style: { fontSize: Math.min(16, size / 3), fontWeight: 700, color: '#ffffff' } }))

@@ -49,7 +49,9 @@ Dirty flags (`STYLE_DIRTY`, `TEXT_DIRTY`, …): paint-only changes never touch Y
 
 ### Input
 
-Hit testing honors clips, scroll offsets, transforms and `pointerEvents` (`pointer-events-none` decorative layers are transparent to pointers). `ui.input.pointerDown/Move/Up/wheel/keyDown…` feed any platform; `@implicit-invocation/three-ui/web` adapts DOM events (the only DOM-aware file). Hover/pressed/focused/disabled state drives `hover:`/`active:`/`focus:`/`disabled:` class variants.
+Hit testing honors clips, scroll offsets, transforms and `pointerEvents` (`pointer-events-none` decorative layers are transparent to pointers).
+
+**Letting presses through to the game:** `ui.hitTest(x, y)` returns the deepest node, decorative or not. `ui.hitTestInteractive(x, y)` returns the nearest node that would actually react (itself or an ancestor): enabled and `focusable`, or listening for `pointerdown/up/cancel/move`, `click` or `wheel`, or a `ScrollView` that can scroll — hover-only listeners and plain backgrounds do not count. `ui.isInteractiveAt(x, y)` is the boolean form; `node.isInteractive` / `node.hasEventListener(type)` expose the pieces. Do not put press listeners on a full-screen root, or everything counts as interactive. `ui.input.pointerDown/Move/Up/wheel/keyDown…` feed any platform; `@implicit-invocation/three-ui/web` adapts DOM events (the only DOM-aware file). Hover/pressed/focused/disabled state drives `hover:`/`active:`/`focus:`/`disabled:` class variants.
 
 ### Yoga runtime portability
 
@@ -120,6 +122,24 @@ Animatable: `opacity`, colors (`backgroundColor`, `borderColor`, `color`, `tintC
 `backdropBlur` (px), `backdropBrightness`, `backdropSaturate` blur what is behind a node, clipped to its rounded rect. Enable with `createThreeUI({ backdropBlur: 'full' | 'low' | 'off' })` (default `'full'`; `'off'` skips everything and the node just paints its own translucent background).
 
 The renderer's framebuffer is copied **once per capture generation** and downsampled with a dual-Kawase chain at ½ … 1/16 resolution; every blurred element samples the shared result. Two strengths exist (small ≤ 20 px, large above; `'low'` only the small one). The first blurred element starts a new capture; a later one that overlaps UI painted *after* that capture starts another (so a modal scrim correctly blurs the HUD under it) — blurred panels over the game scene always share one. Frames without a blurred node do no extra work.
+
+### Renderers: `WebGPURenderer` and the classic `WebGLRenderer`
+
+`createThreeUI({ renderer })` accepts either of Three's renderers; the UI code, styles and batching are identical.
+
+```ts
+// classic WebGLRenderer driving TSL materials (three/addons)
+import { WebGLRenderer } from 'three'
+import { WebGLNodesHandler } from 'three/addons/tsl/WebGLNodesHandler.js'
+const renderer = new WebGLRenderer({ canvas })
+renderer.setNodesHandler(new WebGLNodesHandler())
+const ui = createThreeUI({ renderer, width, height, pixelRatio })
+// per frame: render the game scene, then   ui.update(dt); ui.render()   (the UI never clears; it sets autoClear = false while drawing)
+```
+
+What the classic path needed (all handled inside `@implicit-invocation/three-2d`): the output colour-space transform is applied inside the batch material (Three applies it for node materials *without* a `fragmentNode` only); the batch's meshes share one vertex/index buffer, so disposing one geometry — which `WebGLNodesHandler` does after every material build — disposes its siblings, otherwise the others' VAOs point at deleted buffers; scissor rectangles are converted to GL's bottom-left origin (`WebGPURenderer`'s are top-left). Backdrop blur, gradients, shadows, glyph effects, clipping and animations all work on both. Try it in any example with `?renderer=webgl`.
+
+**Differences to know about:** translucent layers composite in *sRGB space* on a classic `WebGLRenderer` (like CSS) and in *linear space* on `WebGPURenderer` (its frame buffer is linear half-float), so rings, shadows, anti-aliased edges and scrims differ by a few levels — a 35 % black scrim over `#0b1020` ends at `#070a15` vs `#070b18`; opaque interiors are identical (`examples/three-ui-game-ui/parity.mjs` measures it). Tone mapping is never applied to UI output. Because the classic renderer has no framebuffer-sized linear target, the backdrop copy is already encoded (handled for you).
 
 ### Images
 

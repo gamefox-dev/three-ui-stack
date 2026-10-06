@@ -38,6 +38,8 @@ interface Listener {
 
 let nextId = 1
 
+const INTERACTIVE_EVENTS: readonly UIEventType[] = ['pointerdown', 'pointerup', 'pointercancel', 'pointermove', 'click', 'wheel']
+
 /**
  * Retained UI node. NOT a Three `Object3D` — a tree of thousands of nodes renders through a handful of
  * batched meshes. Each node owns exactly one Yoga node (freed in `dispose()`).
@@ -421,6 +423,24 @@ export abstract class UINode {
       if (event.phase === 'target' ? false : l.capture !== capturePhase) continue
       ;(l.handler as UIEventHandler)(event)
     }
+  }
+
+  /** True when a listener for `type` (any phase) is registered on this node. */
+  hasEventListener(type: UIEventType): boolean {
+    return this.listeners !== null && this.listeners.some((l) => l.type === type)
+  }
+
+  /**
+   * Would a press on this node do something? Enabled, and focusable, or listening for a press / drag / wheel event
+   * (`pointerdown`, `pointerup`, `pointercancel`, `pointermove`, `click`, `wheel`), or — for a `ScrollView` — able to scroll.
+   * Hover-only listeners (`pointerenter` / `pointerleave`) and animation events do not count, nor does being a decorative
+   * background. Used by `ui.hitTestInteractive()`.
+   */
+  get isInteractive(): boolean {
+    if (this.disabled || this._disposed) return false
+    if (this.focusable) return true
+    for (const t of INTERACTIVE_EVENTS) if (this.hasEventListener(t)) return true
+    return false
   }
 
   /** Number of listeners (used by tests and the React renderer's leak checks). */

@@ -11,7 +11,7 @@ import {
   type Texture,
 } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
-import { Fn, If, abs, attribute, clamp, dot, exp, float, floor, fwidth, int, ivec2, length, max, min, mix, pow, select, sign, sqrt, sRGBTransferEOTF, step, texture, uv, vec2, vec3, vec4 } from 'three/tsl'
+import { Fn, If, workingToColorSpace, abs, attribute, clamp, dot, exp, float, floor, fwidth, int, ivec2, length, max, min, mix, pow, select, sign, sqrt, sRGBTransferEOTF, step, texture, uv, vec2, vec3, vec4 } from 'three/tsl'
 import type { BlendMode, Disposable } from '../types'
 import { BACKDROP_LARGE, BACKDROP_RAW, BACKDROP_SMALL, type BackdropBlur } from './BackdropBlur'
 import { TABLE_WIDTH, type BoxTable } from './BoxTable'
@@ -141,8 +141,26 @@ function blurredRoundedBox(p: N, half: N, corner: N, sigma: N): N {
   return clamp(value, 0, 1)
 }
 
+/**
+ * Batch material. Under a classic `WebGLRenderer` + `WebGLNodesHandler`, `NodeMaterial` applies the output transform
+ * (working → output colour space) only for materials *without* a `fragmentNode`, so ours would come out linear and far too
+ * dark. Apply it here — only when that handler is present (`builder.context.getOutput`); `WebGPURenderer` (both of its
+ * backends) converts on its own. Tone mapping is deliberately not applied: UI colours must reach the screen as authored.
+ */
+export class BatchNodeMaterial extends MeshBasicNodeMaterial {
+  /** Set false for materials that render into render targets (their values are not encoded). */
+  encodeOutput = true
+
+  override setupOutput(builder: Parameters<MeshBasicNodeMaterial['setupOutput']>[0], outputNode: Parameters<MeshBasicNodeMaterial['setupOutput']>[1]): ReturnType<MeshBasicNodeMaterial['setupOutput']> {
+    const node = super.setupOutput(builder, outputNode)
+    const b = builder as unknown as { context: { getOutput?: unknown }; renderer: { outputColorSpace: string } }
+    if (!this.encodeOutput || !b.context.getOutput) return node
+    return (workingToColorSpace as unknown as (n: unknown, space: string) => typeof node)(node, b.renderer.outputColorSpace)
+  }
+}
+
 function createMaterial(map: Texture, blend: BlendMode, options: BatchMaterialOptions): MeshBasicNodeMaterial {
-  const material = new MeshBasicNodeMaterial()
+  const material = new BatchNodeMaterial()
 
   const vColor = attribute('aColor', 'vec4')
   const vLocal = attribute('aLocal', 'vec2')

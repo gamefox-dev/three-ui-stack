@@ -99,6 +99,19 @@ export class InputManager {
     return inside && cs.pointerEvents !== 'none' ? node : null
   }
 
+  /**
+   * The nearest interactive node under a root-space point: the deepest hit node or the closest ancestor that is
+   * `isInteractive` (events bubble, so a decorative icon inside a button belongs to the button). `null` when the point
+   * hits only decorative nodes (or a disabled subtree), i.e. a press there would do nothing — a host can then let it
+   * through to something else (the game world underneath).
+   */
+  hitTestInteractive(x: number, y: number): UINode | null {
+    const target = this.hitTest(x, y)
+    if (!target || this.isDisabledPath(target)) return null
+    for (let n: UINode | null = target; n; n = n.parent) if (n.isInteractive) return n
+    return null
+  }
+
   // ───────────────────────────── dispatch ─────────────────────────────
 
   private pathTo(node: UINode): UINode[] {

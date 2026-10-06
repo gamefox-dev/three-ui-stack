@@ -37,7 +37,7 @@ bun run dev            # all example sites in parallel
 | [`three-2d-basic`](examples/three-2d-basic) | 5171 | 20 000-sprite batches, atlas, animation, particles, nine-patch, polygons, blend modes, viewports. |
 | [`three-ui-react-native-webgpu`](examples/three-ui-react-native-webgpu) | — | Expo + `react-native-wgpu` portability gate (Metro, no Vite). |
 
-Append `?webgl` to any web example URL to force the WebGL2 backend. Press <kbd>Tab</kbd> to move focus.
+Append `?webgl` to any web example URL to force the WebGL2 backend of `WebGPURenderer`, or `?renderer=webgl` to run a classic `WebGLRenderer` + `WebGLNodesHandler` instead. Press <kbd>Tab</kbd> to move focus.
 
 ## Quick start (React + Tailwind)
 

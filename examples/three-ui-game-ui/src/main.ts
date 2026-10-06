@@ -8,6 +8,10 @@ import { buildStress, type StressHandle } from './stress'
 
 const params = new URLSearchParams(location.search)
 const blur = (params.get('blur') ?? 'full') as 'off' | 'low' | 'full'
+// `?renderer=webgl`: a classic THREE.WebGLRenderer + WebGLNodesHandler instead of WebGPURenderer (same UI code, same output)
+const classic = params.get('renderer') === 'webgl'
+// `?still`: freeze the 3D scene so screenshots of different renderers can be compared pixel for pixel
+const still = params.has('still')
 
 const canvas = document.getElementById('c') as HTMLCanvasElement
 let ui: ThreeUI | null = null
@@ -182,6 +186,11 @@ const controls = v('absolute bottom-4 inset-x-4 flex-row items-center gap-3', [
   stressPicker,
   toggle('Stress', () => stress !== null, () => (stress ? stopStress() : startStress(500))),
   toggle('Reduced motion', () => reduced, () => U.setMediaFlags({ reducedMotion: (reduced = !reduced) })),
+  button(classic ? 'WebGLRenderer' : 'WebGPURenderer', SECONDARY, () => {
+    if (classic) params.delete('renderer')
+    else params.set('renderer', 'webgl')
+    location.search = params.toString()
+  }),
   button(`Blur: ${blur}`, SECONDARY, () => {
     const next = blur === 'full' ? 'low' : blur === 'low' ? 'off' : 'full'
     params.set('blur', next)
@@ -198,7 +207,7 @@ U.setRoot(root)
 
 function startStress(n: number): void {
   stress?.dispose()
-  stress = buildStress(U, stressSlot, n, params.get('anim') === '1')
+  stress = buildStress(U, stressSlot, n, params.get('anim') === '1', params.has('flat'))
   hud.setStyle({ display: 'none' })
   stressPicker.setStyle({ display: 'flex' })
 }
@@ -215,7 +224,7 @@ let statsTimer = 0
 const w = window as unknown as Record<string, unknown>
 
 loop((dt) => {
-  world.update(dt)
+  if (!still) world.update(dt)
   boot.renderer.render(world.scene, world.camera)
   // measured: the UI only (style → layout → paint → batch → renderer.render submission); the 3D scene above is not counted
   const t0 = performance.now()

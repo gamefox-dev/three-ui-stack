@@ -1243,6 +1243,7 @@ export class SpriteBatch implements Disposable {
       geometry.setAttribute('aMode', new InterleavedBufferAttribute(this.interleaved, 1, OFFSET_MODE))
       geometry.setAttribute('aData', new InterleavedBufferAttribute(this.interleaved, 1, OFFSET_DATA))
       geometry.setIndex(this.indexAttribute)
+      geometry.addEventListener('dispose', this.onGeometryDispose)
       mesh = new Mesh(geometry, material)
       mesh.frustumCulled = false
       mesh.matrixAutoUpdate = false
@@ -1362,16 +1363,39 @@ export class SpriteBatch implements Disposable {
     const p = this.tmpV3
     p.set(clip.x, clip.y, 0).project(camera)
     const sx0 = vp.x + ((p.x + 1) / 2) * vp.z
-    const sy0 = vp.y + ((1 - p.y) / 2) * vp.w
     p.set(clip.x + clip.width, clip.y + clip.height, 0).project(camera)
     const sx1 = vp.x + ((p.x + 1) / 2) * vp.z
-    const sy1 = vp.y + ((1 - p.y) / 2) * vp.w
+    // `WebGPURenderer` (both backends) takes scissors from the top-left; a classic `WebGLRenderer` from the bottom-left (GL).
+    const bottomLeft = (renderer as { isWebGLRenderer?: boolean }).isWebGLRenderer === true
+    const row = (ndcY: number) => vp.y + (bottomLeft ? (ndcY + 1) / 2 : (1 - ndcY) / 2) * vp.w
+    p.set(clip.x, clip.y, 0).project(camera)
+    const sy0 = row(p.y)
+    p.set(clip.x + clip.width, clip.y + clip.height, 0).project(camera)
+    const sy1 = row(p.y)
     // tolerate float error from the projection so exact-pixel clips stay exact
     const x = Math.max(0, Math.floor(Math.min(sx0, sx1) + 1e-3))
     const y = Math.max(0, Math.floor(Math.min(sy0, sy1) + 1e-3))
     const w = Math.max(0, Math.ceil(Math.max(sx0, sx1) - 1e-3) - x)
     const h = Math.max(0, Math.ceil(Math.max(sy0, sy1) - 1e-3) - y)
     renderer.setScissor(x, y, w, h)
+  }
+
+  /**
+   * Every pooled mesh has its own `BufferGeometry` but they all share ONE interleaved vertex buffer and ONE index buffer.
+   * A classic `WebGLRenderer` deletes a geometry's GL buffers when it is disposed — and `WebGLNodesHandler` disposes the
+   * geometry after every node-material build — which would leave the sibling meshes' VAOs pointing at deleted buffers
+   * ("no buffer is bound to enabled attribute"). So disposing one geometry disposes them all: every mesh re-binds
+   * against the re-created buffers on its next draw.
+   */
+  private cascading = false
+  private readonly onGeometryDispose = (event: { target?: unknown }): void => {
+    if (this.cascading || this.disposed) return
+    this.cascading = true
+    try {
+      for (const mesh of this.meshes) if (mesh.geometry !== event.target) mesh.geometry.dispose()
+    } finally {
+      this.cascading = false
+    }
   }
 
   /** Number of pooled meshes (one per distinct segment slot ever used). */

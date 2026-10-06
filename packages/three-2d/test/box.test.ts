@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Color4, PolygonSpriteBatch, VERTEX_STRIDE, createOrthographicCamera, normalizeRadii, srgbToOklab } from '../src'
+import { vec4 } from 'three/tsl'
+import { BatchNodeMaterial } from '../src/batch/BatchMaterial'
 import { MockBackdropRenderer, MockRenderer, makeTexture } from './helpers'
 
 /** Round a slice of the box table for stable golden comparison. */
@@ -227,5 +229,55 @@ describe('backdrop capture epochs', () => {
 
   it('premultiplied colour helper sanity', () => {
     expect(new Color4(1, 0, 0, 0.5).a).toBe(0.5)
+  })
+})
+
+describe('classic WebGLRenderer + WebGLNodesHandler support', () => {
+  it('encodes the output only when the nodes handler provides getOutput (WebGPURenderer converts on its own)', () => {
+    const material = new BatchNodeMaterial()
+    const input = vec4(0.2, 0.3, 0.4, 1)
+    const handler = { context: { getOutput: () => null }, renderer: { outputColorSpace: 'srgb' } }
+    const none = { context: {}, renderer: { outputColorSpace: 'srgb' } }
+    const call = (b: unknown) => (material as unknown as { setupOutput(b: unknown, n: unknown): unknown }).setupOutput(b, input)
+    expect(call(none)).toBe(input)
+    expect(call(handler)).not.toBe(input) // wrapped in workingToColorSpace
+    material.encodeOutput = false // render-target passes (backdrop blur) are never encoded
+    expect(call(handler)).toBe(input)
+  })
+
+  it('disposing one batch geometry disposes its siblings (they share the interleaved + index buffers)', () => {
+    const renderer = new MockRenderer()
+    const batch = new PolygonSpriteBatch({ renderer })
+    const a = makeTexture()
+    const b = makeTexture()
+    batch.begin(createOrthographicCamera(100, 100))
+    batch.draw(a, 0, 0, 5, 5)
+    batch.draw(b, 10, 0, 5, 5)
+    batch.draw(a, 20, 0, 5, 5)
+    batch.end()
+    const geometries = batch.scene.children.map((c) => (c as unknown as { geometry: { dispose(): void; addEventListener(t: string, f: () => void): void } }).geometry)
+    expect(geometries.length).toBeGreaterThanOrEqual(2)
+    const disposed = geometries.map(() => 0)
+    geometries.forEach((g, i) => g.addEventListener('dispose', () => disposed[i]!++))
+    geometries[0]!.dispose()
+    expect(disposed).toEqual(geometries.map(() => 1)) // each exactly once, no event storm
+    batch.dispose()
+  })
+
+  it('scissors use a bottom-left origin for a classic WebGLRenderer and top-left for WebGPURenderer', () => {
+    const top = new MockRenderer()
+    const bottom = Object.assign(new MockRenderer(), { isWebGLRenderer: true })
+    for (const r of [top, bottom]) {
+      const batch = new PolygonSpriteBatch({ renderer: r })
+      const tex = makeTexture()
+      batch.begin(createOrthographicCamera(800, 600))
+      batch.pushClip(100, 50, 200, 100)
+      batch.draw(tex, 280, 60, 40, 10) // sticks out: the scissor is needed
+      batch.popClip()
+      batch.end()
+      batch.dispose()
+    }
+    expect(top.calls[0]!.scissor).toEqual([100, 50, 200, 100])
+    expect(bottom.calls[0]!.scissor).toEqual([100, 600 - 150, 200, 100])
   })
 })

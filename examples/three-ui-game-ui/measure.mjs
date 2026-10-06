@@ -1,4 +1,5 @@
-// Headless measurement of the stress screen on both Three backends.
+// Headless measurement of the stress screen on all three renderer paths: WebGPURenderer (WebGPU), WebGPURenderer (WebGL2
+// backend) and a classic WebGLRenderer + WebGLNodesHandler (`?renderer=webgl`).
 //
 //   bun add -d playwright-core        # not a repo dependency (browser binaries are yours)
 //   bun run dev                        # in another terminal (port 5175)
@@ -12,6 +13,11 @@ import { chromium } from 'playwright-core'
 const chrome = process.argv[2] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const base = process.env.BASE ?? 'http://localhost:5175/'
 const counts = [100, 500, 1000, 2000]
+const paths = [
+  { id: 'webgpu', query: {} },
+  { id: 'webgl', query: { webgl: '' } },
+  { id: 'classic', query: { renderer: 'webgl' } },
+]
 const args = ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist', '--enable-features=Vulkan', '--use-angle=metal', '--disable-frame-rate-limit', '--disable-gpu-vsync']
 
 const rows = []
@@ -20,13 +26,13 @@ const scenarios = [
   { name: 'HUD + modal (backdrop blur)', query: { modal: '' } },
 ]
 const browser = await chromium.launch({ executablePath: chrome, headless: true, args })
-for (const backend of ['webgpu', 'webgl']) {
+for (const path of paths) {
   for (const animate of [false, true]) {
     for (const n of counts) {
       const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 })
       const q = new URLSearchParams({ stress: String(n) })
       if (animate) q.set('anim', '1')
-      if (backend === 'webgl') q.set('webgl', '')
+      for (const [k, v] of Object.entries(path.query)) q.set(k, v)
       await page.goto(`${base}?${q}`)
       await page.waitForFunction(() => (window.__frames ?? 0) > 5, null, { timeout: 20000 })
       await page.waitForTimeout(1500) // settle (pipeline compile, first uploads)
@@ -43,11 +49,11 @@ for (const backend of ['webgpu', 'webgl']) {
   }
 }
 
-for (const backend of ['webgpu', 'webgl']) {
+for (const path of paths) {
   for (const sc of scenarios) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 })
     const q = new URLSearchParams(sc.query)
-    if (backend === 'webgl') q.set('webgl', '')
+    for (const [k, v] of Object.entries(path.query)) q.set(k, v)
     await page.goto(`${base}?${q}`)
     await page.waitForFunction(() => (window.__frames ?? 0) > 5, null, { timeout: 20000 })
     await page.waitForTimeout(3000)

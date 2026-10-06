@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { GlyphLayout } from '@implicit-invocation/three-2d'
-import { Image, Text, View, createThreeUI, resolveGradientForBox, linearGeometry, radialGeometry, resolveStopPositions, type ResolvedGradient } from '../src'
+import { Image, ScrollView, Text, View, createThreeUI, resolveGradientForBox, linearGeometry, radialGeometry, resolveStopPositions, type ResolvedGradient } from '../src'
 import { resetWarnings } from '../src/dev'
 import { Color4 } from '@implicit-invocation/three-2d'
 import { dumpBatch, loadFixtureFonts, loadFixtureFontsWithDisplay, makeTexture, makeUI } from './helpers'
@@ -325,5 +325,42 @@ describe('createThreeUI options', () => {
   it('backdropBlur defaults to full only when the renderer can copy the framebuffer', () => {
     const ui = createThreeUI({ width: 100, height: 100 })
     expect(ui.batch.backdrop).toBeNull()
+  })
+})
+
+describe('hitTestInteractive', () => {
+  it('ignores decorative nodes and finds the owning interactive ancestor', () => {
+    const ui = makeUI({ width: 300, height: 300 })
+    const icon = new View({ name: 'icon', style: { width: 20, height: 20 } })
+    const button = new View({ name: 'button', style: { width: 100, height: 40 }, children: [icon] })
+    button.addEventListener('click', () => {})
+    const hoverOnly = new View({ name: 'hover', style: { width: 100, height: 40 } })
+    hoverOnly.addEventListener('pointerenter', () => {})
+    const focusable = new View({ name: 'focus', focusable: true, style: { width: 100, height: 40 } })
+    const decor = new View({ name: 'decor', style: { width: 100, height: 40 } })
+    ui.setRoot(new View({ children: [button, hoverOnly, focusable, decor] }))
+    ui.update()
+    expect(ui.hitTest(5, 5)).toBe(icon) // plain hit test returns the decorative icon
+    expect(ui.hitTestInteractive(5, 5)).toBe(button) // …the interactive query returns its owner
+    expect(ui.isInteractiveAt(60, 30)).toBe(true)
+    expect(ui.hitTestInteractive(10, 50)).toBeNull() // hover-only listeners do not take presses
+    expect(ui.hitTestInteractive(10, 90)).toBe(focusable)
+    expect(ui.isInteractiveAt(10, 130)).toBe(false) // decorative
+    expect(ui.isInteractiveAt(250, 250)).toBe(false) // empty space
+  })
+
+  it('disabled nodes, scrollable ScrollViews and pointer-events: none', () => {
+    const ui = makeUI({ width: 300, height: 300 })
+    const disabled = new View({ name: 'off', style: { width: 100, height: 40 } })
+    disabled.addEventListener('click', () => {})
+    disabled.setDisabled(true)
+    const long = new ScrollView({ focusable: false, style: { width: 100, height: 50 }, children: [new View({ style: { width: 100, height: 300 } })] })
+    const short = new ScrollView({ focusable: false, style: { width: 100, height: 50 }, children: [new View({ style: { width: 100, height: 20 } })] })
+    const overlay = new View({ style: { position: 'absolute', left: 0, top: 0, width: 300, height: 300, pointerEvents: 'none' } })
+    ui.setRoot(new View({ children: [disabled, long, short, overlay] }))
+    ui.update()
+    expect(ui.isInteractiveAt(10, 10)).toBe(false)
+    expect(ui.hitTestInteractive(10, 60)).toBe(long) // can scroll → takes the press
+    expect(ui.isInteractiveAt(10, 120)).toBe(false) // nothing to scroll (and not focusable) → decorative
   })
 })

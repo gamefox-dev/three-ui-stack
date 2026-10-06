@@ -1,10 +1,13 @@
 import * as THREE from 'three/webgpu'
+import { WebGLRenderer } from 'three'
+import { WebGLNodesHandler } from 'three/addons/tsl/WebGLNodesHandler.js'
 
 export interface Boot {
+  /** A `WebGPURenderer`, or — with `?renderer=webgl` — a classic `WebGLRenderer` + `WebGLNodesHandler` (same surface for the UI). */
   renderer: THREE.WebGPURenderer
   canvas: HTMLCanvasElement
-  /** 'WebGPU' or 'WebGL2' — whichever backend Three picked. */
-  backend: 'WebGPU' | 'WebGL2'
+  /** 'WebGPU' or 'WebGL2' (WebGPURenderer's backends), or 'WebGLRenderer' (classic renderer + WebGLNodesHandler). */
+  backend: 'WebGPU' | 'WebGL2' | 'WebGLRenderer'
   /** Logical (CSS px) size and pixel ratio, kept up to date. */
   size: { width: number; height: number; pixelRatio: number }
 }
@@ -15,10 +18,22 @@ export interface Boot {
  * `onResize` runs once immediately and whenever the canvas box changes.
  */
 export async function bootRenderer(canvas: HTMLCanvasElement, onResize: (size: Boot['size']) => void): Promise<Boot> {
-  const forceWebGL = new URLSearchParams(location.search).has('webgl')
-  const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, alpha: false, forceWebGL })
-  await renderer.init()
-  const backend = (renderer as unknown as { backend: { isWebGPUBackend?: boolean } }).backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'
+  const params = new URLSearchParams(location.search)
+  const forceWebGL = params.has('webgl')
+  // `?renderer=webgl`: the classic WebGLRenderer driving TSL node materials through WebGLNodesHandler (three/addons)
+  const classic = params.get('renderer') === 'webgl'
+  let renderer: THREE.WebGPURenderer
+  let backend: Boot['backend']
+  if (classic) {
+    const gl = new WebGLRenderer({ canvas, antialias: false, alpha: false })
+    gl.setNodesHandler(new WebGLNodesHandler())
+    renderer = gl as unknown as THREE.WebGPURenderer
+    backend = 'WebGLRenderer'
+  } else {
+    renderer = new THREE.WebGPURenderer({ canvas, antialias: false, alpha: false, forceWebGL })
+    await renderer.init()
+    backend = (renderer as unknown as { backend: { isWebGPUBackend?: boolean } }).backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'
+  }
   const size = { width: 1, height: 1, pixelRatio: 1 }
   const apply = () => {
     size.width = Math.max(1, canvas.clientWidth)

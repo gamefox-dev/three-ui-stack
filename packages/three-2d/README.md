@@ -72,6 +72,7 @@ A batch starts a new segment (draw call) on a texture, blend or clip change; it 
 | --- | --- |
 | Browser + `WebGPURenderer` (WebGPU) | ✅ |
 | Browser + `WebGPURenderer` (WebGL2 backend) | ✅ |
+| Browser + classic `WebGLRenderer` + `WebGLNodesHandler` (`three/addons`) | ✅ (output transform, shared-buffer VAOs and scissor origin are handled; translucent layers blend in sRGB space instead of linear — see `@implicit-invocation/three-ui`) |
 | React Native + `react-native-wgpu` + Three WebGPU | ✅ by design (no DOM/Canvas2D/`window` anywhere) |
 
 ## Resources & disposal

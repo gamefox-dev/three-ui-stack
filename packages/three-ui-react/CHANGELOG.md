@@ -1,5 +1,17 @@
 # @implicit-invocation/three-ui-react
 
+## 0.6.0
+
+### Minor Changes
+
+- `ScrollView` drag now follows Cocos Creator's ScrollView: elastic overscroll at half rate, a release velocity from the last 5 drag moves, an attenuated quint-ease-out flick (`brake` 0.5, movement factor 0.7, `√√(v/5)` seconds) and a 1 s bounce-back. New `elastic`, `inertia`, `brake`, `bounceDuration` options. Replaces the old exponential-decay inertia; scroll offsets can briefly leave `[0, max]` while overscrolled.
+
+### Patch Changes
+
+- Updated dependencies
+  - @implicit-invocation/three-ui@0.6.0
+  - @implicit-invocation/three-2d@0.6.0
+
 ## 0.5.0
 
 ### Minor Changes

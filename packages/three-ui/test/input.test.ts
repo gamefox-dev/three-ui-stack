@@ -243,10 +243,94 @@ describe('ScrollView', () => {
     expect(ui.needsRender).toBe(true)
     for (let i = 0; i < 600; i++) ui.update(1 / 60)
     expect(scroll.scrollY).toBeGreaterThan(released)
-    expect(scroll.scrollY).toBeLessThanOrEqual(scroll.maxScrollY)
+    expect(scroll.scrollY).toBeLessThanOrEqual(scroll.maxScrollY) // overshoot springs back to the end
     const settled = scroll.scrollY
     for (let i = 0; i < 60; i++) ui.update(1 / 60)
     expect(scroll.scrollY).toBe(settled)
+  })
+
+  describe('Cocos-style drag model', () => {
+    const drag = (ui: ReturnType<typeof makeUI>, from: number, steps: number[], dtMs = 16, t0 = 0) => {
+      let y = from
+      let t = t0
+      ui.input.pointerDown(50, y, { timeStamp: t })
+      for (const step of steps) {
+        y += step
+        t += dtMs
+        ui.input.pointerMove(50, y, { timeStamp: t })
+      }
+      return { y, t }
+    }
+    const settle = (ui: ReturnType<typeof makeUI>, seconds = 4) => {
+      for (let i = 0; i < seconds * 60; i++) ui.update(1 / 60)
+    }
+
+    it('resists at half rate past the ends and springs back over bounceDuration', () => {
+      const { ui, scroll } = scrollSetup()
+      // at the top, drag down 60 px in slow steps (the finger rests before lifting: no flick)
+      const { y, t } = drag(ui, 20, [8, 8, 8, 8, 8, 8, 8, 8])
+      expect(scroll.scrollY).toBeCloseTo(-(8 + 7 * 4)) // first move before leaving bounds is 1:1 only while inside: afterwards ×0.5
+      ui.input.pointerUp(50, y, { timeStamp: t + 700 })
+      expect(scroll.scrollY).toBeLessThan(0) // still overscrolled
+      settle(ui, 0.5)
+      expect(scroll.scrollY).toBeLessThan(0)
+      expect(scroll.scrollY).toBeGreaterThan(-36) // already coming back (quint ease-out)
+      settle(ui, 1)
+      expect(scroll.scrollY).toBe(0) // one second later it is home
+      expect(ui.needsRender).toBe(true)
+      ui.render()
+      expect(ui.needsRender).toBe(false)
+    })
+
+    it('does not overscroll with elastic: false, and flicks stop at the end', () => {
+      const { ui, scroll } = scrollSetup()
+      scroll.elastic = false
+      drag(ui, 20, [10, 10, 10, 10])
+      expect(scroll.scrollY).toBe(0)
+      ui.input.pointerUp(50, 60, { timeStamp: 700 })
+      drag(ui, 150, [-30, -30, -30, -30], 16, 1000)
+      ui.input.pointerUp(50, 30, { timeStamp: 1066 })
+      settle(ui, 4)
+      expect(scroll.scrollY).toBe(scroll.maxScrollY)
+    })
+
+    it('flick distance follows the Cocos formula: velocity · (1 − brake) · 0.7 plus attenuated extra, in √√(v/5) seconds', () => {
+      const { ui, scroll } = scrollSetup()
+      scroll.scrollTo(0, 400)
+      // 5 moves of 20 px at 16 ms: v = 100 px / 0.08 s · (1 − 0.5) = 625 px/s
+      const { y, t } = drag(ui, 100, [-6, -6, -6, -6, -6], 16)
+      const grabbed = scroll.scrollY // content followed the finger: 400 + 30
+      expect(grabbed).toBeCloseTo(430)
+      ui.input.pointerUp(y, y, { timeStamp: t })
+      const v = (30 * 0.5) / 0.08 // gathered: five 6 px moves in 80 ms
+      const time = Math.sqrt(Math.sqrt(v / 5))
+      // deltaMove = −v · 0.7; the attenuated target adds (max · (1 − brake) · factor) — here factor > 3, so the Cocos clamp applies
+      settle(ui, time * 3 + 1)
+      expect(scroll.scrollY).toBeGreaterThan(grabbed)
+      expect(scroll.scrollY).toBeLessThanOrEqual(scroll.maxScrollY)
+    })
+
+    it('a finger that rests before lifting, brake: 1 or inertia: false give no flick', () => {
+      for (const setup of [(s: ScrollView) => void s, (s: ScrollView) => (s.brake = 1), (s: ScrollView) => (s.inertia = false)]) {
+        const { ui, scroll } = scrollSetup()
+        setup(scroll)
+        const rested = setup.length === 1 && scroll.brake === 0.5 && scroll.inertia
+        const { y, t } = drag(ui, 100, [-20, -20, -20, -20], 16)
+        const at = scroll.scrollY
+        ui.input.pointerUp(50, y, { timeStamp: rested ? t + 600 : t + 1 }) // long rest, or an immediate release
+        settle(ui, 2)
+        if (rested) expect(scroll.scrollY).toBe(at)
+        else if (scroll.brake === 1 || !scroll.inertia) expect(scroll.scrollY).toBe(at)
+      }
+    })
+
+    it('a lone view takes a drag at the end (elastic); with an outer scroller it hands the gesture over', () => {
+      const { ui, scroll } = scrollSetup()
+      ui.input.pointerDown(50, 20, { timeStamp: 0 })
+      ui.input.pointerMove(50, 40, { timeStamp: 16 })
+      expect(scroll.scrollY).toBeLessThan(0) // overscrolling at the top
+      ui.input.pointerUp(50, 40, { timeStamp: 600 })
+    })
   })
 
   it('lets the innermost scroller own a drag; it hands over only when it cannot scroll that way', () => {

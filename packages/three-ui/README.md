@@ -177,6 +177,10 @@ createThreeUI({
 
 **Idle and scrolling cost.** `ui.update(dt)` then `ui.renderIfNeeded()` in your loop draws only when something changed (the canvas keeps its last picture), so a still UI costs nothing. `ScrollView` repaints only the visible rows (off-screen ones are culled), layout read-back touches only the nodes Yoga re-laid out, and notched mouse-wheel steps ease toward their target (`smoothWheel`, default on; trackpad deltas apply directly).
 
+### ScrollView feel (Cocos Creator model)
+
+Finger / mouse drag follows [Cocos Creator's `ScrollView`](https://github.com/cocos/cocos-engine/blob/v3.8.4/cocos/ui/scroll-view.ts): the content follows the finger 1:1, **half-rate past the ends** (`elastic`), and a release starts an **attenuated flick** — velocity from the last 5 moves, `· (1 − brake) · 0.7`, travelling a quint-ease-out distance over `√√(v/5)` seconds (×3 for hard flicks) — or, when out of bounds, a **bounce-back** over `bounceDuration` seconds. A finger that rested ≥ 0.5 s before lifting does not flick. Options on `ScrollView` (all live properties): `elastic` (true), `inertia` (true), `brake` (0.5; 1 = no flick), `bounceDuration` (1), plus `smoothWheel` for notched mouse wheels. A lone view takes a drag even at its end (to overscroll); inside an outer scroller of the same axis it hands the gesture over.
+
 ### Nine-patch frames for 2×/3× art
 
 `NinePatchView` takes a `NinePatch` from `@implicit-invocation/three-2d` (`atlas.createPatch('panel', 0.5)` for art baked at 2×). Its minimum size and — when the atlas region has `pad:` — its default padding come from the scaled patch (an explicit `padding*` style wins); `patchScale` overrides the patch's scale for one view.

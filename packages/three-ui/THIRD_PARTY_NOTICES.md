@@ -30,3 +30,10 @@ SOFTWARE.
 ```
 
 The wasm → asm.js conversion uses Binaryen's `wasm2js` (Apache-2.0) as a *build tool*; its output is generated code.
+
+## Cocos Creator ScrollView
+
+The drag / flick / bounce-back behaviour of `ScrollView` (`src/core/ScrollView.ts`) follows the algorithm and constants of
+`cocos/ui/scroll-view.ts` from **cocos-engine** (MIT License, Copyright (c) Xiamen Yaji Software Co., Ltd.):
+`NUMBER_OF_GATHERED_TOUCHES_FOR_MOVE_SPEED`, `OUT_OF_BOUNDARY_BREAKING_FACTOR`, `MOVEMENT_FACTOR`, `brake`, `bounceDuration`,
+the attenuation formulas and `quintEaseOut`. The code is re-implemented in one dimension.

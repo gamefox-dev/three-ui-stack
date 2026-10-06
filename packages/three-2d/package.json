@@ -1,6 +1,6 @@
 {
   "name": "@implicit-invocation/three-2d",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "libGDX-inspired batched 2D rendering primitives on top of Three.js (WebGPU / WebGL2 / React Native WebGPU).",
   "license": "MIT",
   "type": "module",

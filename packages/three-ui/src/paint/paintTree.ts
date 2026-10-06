@@ -2,6 +2,7 @@ import { Affine2 } from '@implicit-invocation/three-2d'
 import type { UINode } from '../core/UINode'
 import { orderedChildren } from '../input/InputManager'
 import type { BatchDrawContext } from './BatchDrawContext'
+import { cornerRadii } from '../core/paintBox'
 import { buildTransform } from './transform'
 
 export interface PaintTreeStats {
@@ -10,6 +11,7 @@ export interface PaintTreeStats {
 }
 
 const matrix = new Affine2()
+const clipRadii: [number, number, number, number] = [0, 0, 0, 0]
 
 /**
  * Depth-first paint traversal: absolute coordinates, opacity/transform/clip stacks, z-ordered children,
@@ -58,7 +60,7 @@ function paintNode(node: UINode, ox: number, oy: number, ctx: BatchDrawContext, 
   node.paintSelf(ctx, x, y, w, h)
 
   const clips = cs.overflow !== 'visible'
-  if (clips) ctx.pushClip({ x, y, width: w, height: h })
+  if (clips) ctx.pushClip({ x, y, width: w, height: h }, cs.borderRadius > 0 || cs.borderTopLeftRadius || cs.borderTopRightRadius || cs.borderBottomRightRadius || cs.borderBottomLeftRadius ? cornerRadii(cs, clipRadii) : undefined)
   const kids = node.children
   if (kids.length > 0) {
     const cox = x + node.childOffsetX

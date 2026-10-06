@@ -22,20 +22,30 @@ import { configureTexture } from '../texture/configureTexture'
 import { TextureRegion, fullRegion } from '../texture/TextureRegion'
 import type { BlendMode, ColorLike, Disposable, FlushReason, Rect } from '../types'
 import { RenderStats } from '../types'
-import type { MeshBasicNodeMaterial } from 'three/webgpu'
 import {
   BACKDROP_ENTRY,
   BOX_ENTRY_BASE,
   BatchMaterialCache,
+  BatchNodeMaterial,
   MAX_GRADIENT_STOPS,
+  MAX_TEXTURE_SLOTS,
   MODE_BACKDROP,
   MODE_BOX,
+  MODE_BOX_GRADIENT,
+  MODE_BOX_GRADIENT_SMALL,
   MODE_GLYPH,
   MODE_GLYPH_EFFECT,
+  MODE_GLYPH_SHAPED,
+  MODE_RADIX,
+  CLIP_RADIX,
   MODE_SHADOW_INSET,
+  MODE_SHADOW_INSET_HARD,
   MODE_SHADOW_OUTER,
+  MODE_SHADOW_OUTER_HARD,
   MODE_SOLID,
+  MODE_SOLID_SHAPED,
   MODE_SPRITE,
+  MODE_SPRITE_SHAPED,
   OFFSET_BORDER,
   OFFSET_COLOR,
   OFFSET_DATA,
@@ -45,6 +55,7 @@ import {
   OFFSET_UV,
   SHADOW_ENTRY,
   VERTEX_STRIDE,
+  gradientClasses,
 } from './BatchMaterial'
 import { BackdropBlur, type BackdropQuality, type BackdropRenderer } from './BackdropBlur'
 import { BoxTable } from './BoxTable'
@@ -74,6 +85,24 @@ export interface BatchOptions {
    * construction: it adds three texture bindings to the batch material.
    */
   backdrop?: BackdropQuality
+  /**
+   * Textures one draw call can sample. A texture change only starts a new draw call when this many distinct textures are already
+   * bound (or blend / clip change). `'auto'` asks the renderer for its texture-unit budget (up to {@link MAX_TEXTURE_SLOTS}) and
+   * falls back to 1 when no renderer / limit is known. `1` restores the classic one-texture-per-draw behaviour. Each quad then
+   * samples exactly one texture (a branch over the slot index), never all of them.
+   */
+  maxTextures?: number | 'auto'
+  /**
+   * Gradient shader cost cap, 2…{@link MAX_GRADIENT_STOPS} (default 8). Gradients with at most 3 stops already use a cheaper
+   * loop; lowering this also cuts the cost of the full gradient path (extra stops are dropped).
+   */
+  maxGradientStops?: number
+  /**
+   * How `pushClip` clips. `'scissor'` (default): hardware scissor, one `renderer.render()` per clip rectangle (~1 ms fixed CPU each on
+   * a phone). `'shader'`: clips in the fragment shader (anti-aliased, optionally with rounded corners), so a clip never splits a draw
+   * call or adds a render pass; quads fully inside their clip cost nothing extra and quads fully outside are skipped.
+   */
+  clip?: 'scissor' | 'shader'
 }
 
 export interface BatchDrawOptions {
@@ -107,7 +136,10 @@ export interface ShapeOptions {
 
 /** One draw call: a contiguous index range with a single texture / blend / clip state. */
 export interface BatchSegment {
+  /** First texture bound to the segment (the white pixel while it only holds texture-free quads). */
   texture: Texture | null
+  /** Texture slot table of the draw call: quad `k` samples `textures[slot]`. Empty while only texture-free quads were written. */
+  textures: Texture[]
   blend: BlendMode
   clip: ClipRect | null
   indexStart: number
@@ -127,6 +159,18 @@ export interface BatchSegment {
 
 /** World-space axis-aligned clip rectangle (after the transform stack at push time). */
 export interface ClipRect extends Rect {}
+
+/** Rounded rectangle a shader clip follows (the pushed rect, or the nearest ancestor's when the clip itself is square). */
+interface RoundClip {
+  cx: number
+  cy: number
+  hw: number
+  hh: number
+  r0: number
+  r1: number
+  r2: number
+  r3: number
+}
 
 export interface BoxOptions {
   /** Border box in batch units. */
@@ -189,6 +233,23 @@ function sameClip(a: ClipRect | null, b: ClipRect | null): boolean {
   return a === b || (a !== null && b !== null && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height)
 }
 
+/** Texture units the renderer can bind to a fragment shader, or null when it does not say. */
+function textureUnits(renderer: unknown): number | null {
+  const r = renderer as {
+    capabilities?: { maxTextures?: number }
+    backend?: { gl?: { getParameter?(p: number): unknown }; device?: { limits?: { maxSampledTexturesPerShaderStage?: number; maxSamplersPerShaderStage?: number } } }
+  }
+  // classic WebGLRenderer
+  if (typeof r.capabilities?.maxTextures === 'number') return r.capabilities.maxTextures
+  // WebGPURenderer on WebGPU: textures and samplers are limited separately (we bind one of each per slot)
+  const limits = r.backend?.device?.limits
+  if (limits) return Math.min(limits.maxSampledTexturesPerShaderStage ?? 16, limits.maxSamplersPerShaderStage ?? 16)
+  // WebGPURenderer on its WebGL2 backend (MAX_TEXTURE_IMAGE_UNITS)
+  const gl = r.backend?.gl
+  const units = gl?.getParameter?.(0x8872)
+  return typeof units === 'number' ? units : null
+}
+
 const DEFAULT_MAX_SPRITES = 4096
 /** Resolution of the "painted since the last backdrop capture" bitmap. */
 const DIRTY_COLS = 24
@@ -213,17 +274,27 @@ export class SpriteBatch implements Disposable {
 
   private readonly interleaved: InterleavedBuffer
   private readonly indexAttribute: BufferAttribute
-  private readonly materials: BatchMaterialCache
+  private materials: BatchMaterialCache | null = null
+  private readonly requestedTextures: number | 'auto'
+  /** Slot budget resolved for the current renderer (see `resolveSlots`). */
+  private slotLimit = 1
+  private slotLimitRenderer: BatchRenderer | null | undefined
+  /** Gradient stop cap and the stop count up to which the cheaper gradient shader runs. */
+  readonly maxGradientStops: number
+  private readonly gradientSmall: number
+  private readonly srgbVertexColors: boolean
   /** Every mesh ever created (hidden between frames). */
   private readonly meshes: Mesh[] = []
-  /** Meshes keyed by material: a mesh keeps its material for life (swapping materials on a mesh breaks Three's render-object cache). */
-  private readonly meshPools = new Map<MeshBasicNodeMaterial, Mesh[]>()
-  private readonly meshCursor = new Map<MeshBasicNodeMaterial, number>()
+  /** Meshes keyed by blend mode; mesh `i` of a pool keeps material `i` of that blend for life (swapping materials on a mesh breaks Three's render-object cache). */
+  private readonly meshPools = new Map<BlendMode, Mesh[]>()
+  private readonly meshCursor = new Map<BlendMode, number>()
   private readonly segMeshes: Mesh[] = []
   private segmentCount = 0
   private segmentPool: BatchSegment[] = []
 
   private _begun = false
+  private replayable = false
+  private midFrameFlush = false
   private camera: Camera | null = null
   private disposed = false
 
@@ -245,6 +316,18 @@ export class SpriteBatch implements Disposable {
   /** Shader mode written into every vertex (see the `MODE_*` constants) and whether the quad ignores its texture. */
   private mode = MODE_SPRITE
   private texFree = false
+  /** Texture slot of the quad being written (set by `useState`). */
+  private slot = 0
+  /** Shader clip entry (1-based, 0 = none) of the quad being written. */
+  private clipIdx = 0
+  readonly clipMode: 'scissor' | 'shader'
+  private readonly shaderClip: boolean
+  /** One 3-texel entry per distinct clip: intersected rect, rounded-rect center/half, corner radii. */
+  readonly clipTable: BoxTable | null
+  private readonly clipEntries = new Map<ClipRect, number>()
+  private readonly roundStack: (RoundClip | null)[] = []
+  private roundPool: RoundClip[] = []
+  private currentRound: RoundClip | null = null
   /** Box-table entry index written into every vertex while drawing table-driven quads. */
   private dataIndex = 0
   /** Per-frame float table read by box / shadow / backdrop quads. */
@@ -281,12 +364,77 @@ export class SpriteBatch implements Disposable {
     const wantsBackdrop = options.backdrop !== undefined && options.backdrop !== 'off' && options.renderer !== undefined
     const rendererWithCopy = options.renderer as unknown as Partial<BackdropRenderer> | undefined
     this.backdrop = wantsBackdrop && typeof rendererWithCopy?.copyFramebufferToTexture === 'function' ? new BackdropBlur(options.renderer as unknown as BackdropRenderer, options.backdrop as 'low' | 'full') : null
-    this.materials = new BatchMaterialCache({ srgbVertexColors: options.srgbVertexColors ?? true, table: this.table, backdrop: this.backdrop ?? undefined })
+    this.srgbVertexColors = options.srgbVertexColors ?? true
+    this.clipMode = options.clip ?? 'scissor'
+    this.shaderClip = this.clipMode === 'shader'
+    this.clipTable = this.shaderClip ? new BoxTable() : null
+    this.requestedTextures = options.maxTextures ?? 'auto'
+    const stops = Math.max(2, Math.min(MAX_GRADIENT_STOPS, Math.floor(options.maxGradientStops ?? MAX_GRADIENT_STOPS)))
+    this.maxGradientStops = stops
+    this.gradientSmall = gradientClasses(stops)[0]
     this.scene.matrixAutoUpdate = false
   }
 
   get begun(): boolean {
     return this._begun
+  }
+
+  /** Textures one draw call samples at most (resolved from `maxTextures` and the renderer when a frame begins). */
+  get maxTextures(): number {
+    return this.slotLimit
+  }
+
+  /** Decide the slot budget for the current renderer; a change drops the materials (their shaders embed the slot count). */
+  private resolveSlots(): void {
+    const renderer = this.renderer
+    if (this.slotLimitRenderer === renderer) return
+    this.slotLimitRenderer = renderer
+    let n = 1
+    if (typeof this.requestedTextures === 'number') n = this.requestedTextures
+    else if (renderer) {
+      const units = textureUnits(renderer)
+      // keep the box table, the backdrop sources and one spare unit free
+      if (units !== null) n = units - 2 - (this.backdrop ? 3 : 0) - (this.shaderClip ? 1 : 0)
+    }
+    n = Math.max(1, Math.min(MAX_TEXTURE_SLOTS, Math.floor(n)))
+    if (n === this.slotLimit) return
+    this.slotLimit = n
+    this.dropMeshesAndMaterials()
+  }
+
+  private dropMeshesAndMaterials(): void {
+    for (const mesh of this.meshes) {
+      this.scene.remove(mesh)
+      mesh.geometry.removeEventListener('dispose', this.onGeometryDispose)
+      mesh.geometry.dispose()
+    }
+    this.meshes.length = 0
+    this.meshPools.clear()
+    this.meshCursor.clear()
+    this.segMeshes.length = 0
+    this.materials?.dispose()
+    this.materials = null
+  }
+
+  private placeholders: DataTexture[] = []
+
+  /** One distinct 1×1 white texture per slot (see `createMaterial`: slots must never share a texture at build time). */
+  private makePlaceholders(): DataTexture[] {
+    for (const t of this.placeholders) t.dispose()
+    this.placeholders = Array.from({ length: this.slotLimit }, () => configureTexture(new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, RGBAFormat, UnsignedByteType)))
+    return this.placeholders
+  }
+
+  private getMaterials(): BatchMaterialCache {
+    return (this.materials ??= new BatchMaterialCache({
+      srgbVertexColors: this.srgbVertexColors,
+      table: this.table,
+      backdrop: this.backdrop ?? undefined,
+      clipTable: this.clipTable ?? undefined,
+      maxTextures: this.slotLimit,
+      maxGradientStops: this.maxGradientStops,
+      placeholders: this.makePlaceholders(),
+    }))
   }
 
   /** Number of quads/triangles currently buffered is `vertexCount / 4` for quad draws. */
@@ -297,6 +445,7 @@ export class SpriteBatch implements Disposable {
   /** Attach / replace the caller-owned renderer. */
   setRenderer(renderer: BatchRenderer | null): void {
     this.renderer = renderer
+    this.replayable = false
   }
 
   // ───────────────────────────── state ─────────────────────────────
@@ -355,7 +504,7 @@ export class SpriteBatch implements Disposable {
    * Intersect the active clip with a rectangle (transformed by the current transform; rotation is
    * approximated by its axis-aligned bounds). Nested clips intersect. Always pair with `popClip()`.
    */
-  pushClip(x: number, y: number, width: number, height: number): void {
+  pushClip(x: number, y: number, width: number, height: number, radii?: Radii4): void {
     const t = this.transform
     let x0 = x
     let y0 = y
@@ -391,12 +540,32 @@ export class SpriteBatch implements Disposable {
     rect.height = Math.max(0, y1 - y0)
     this.clipStack.push(cur)
     this.currentClip = rect
+    if (this.shaderClip) {
+      // rounded corners: only for an untransformed rect (a transformed clip is approximated by its bounds); a square clip keeps the
+      // nearest rounded ancestor
+      this.roundStack.push(this.currentRound)
+      if (radii && t.isIdentity() && (radii[0] > 0 || radii[1] > 0 || radii[2] > 0 || radii[3] > 0)) {
+        let round = this.roundPool[this.roundStack.length - 1]
+        if (!round) this.roundPool[this.roundStack.length - 1] = round = { cx: 0, cy: 0, hw: 0, hh: 0, r0: 0, r1: 0, r2: 0, r3: 0 }
+        const rr = normalizeRadii(radii, width, height, this.tmpRadii)
+        round.cx = x + width / 2
+        round.cy = y + height / 2
+        round.hw = width / 2
+        round.hh = height / 2
+        round.r0 = rr[0]
+        round.r1 = rr[1]
+        round.r2 = rr[2]
+        round.r3 = rr[3]
+        this.currentRound = round
+      }
+    }
     this.stats.clipChanges++
   }
 
   popClip(): void {
     if (this.clipStack.length === 0) throw new Error('[three-2d] popClip() without matching pushClip()')
     this.currentClip = this.clipStack.pop() ?? null
+    if (this.shaderClip) this.currentRound = this.roundStack.pop() ?? null
     this.stats.clipChanges++
   }
 
@@ -417,7 +586,10 @@ export class SpriteBatch implements Disposable {
   begin(camera?: Camera): void {
     if (this._begun) throw new Error('[three-2d] SpriteBatch.begin() called twice without end()')
     this._begun = true
+    this.replayable = false
+    this.midFrameFlush = false
     if (camera) this.camera = camera
+    this.resolveSlots()
     this.vertexCount = 0
     this.indexCount = 0
     this.segmentCount = 0
@@ -431,6 +603,10 @@ export class SpriteBatch implements Disposable {
     this.clipPoolIndex = 0
     this.clipStack.length = 0
     this.currentClip = null
+    this.roundStack.length = 0
+    this.currentRound = null
+    this.clipEntries.clear()
+    this.clipTable?.reset()
     this.transformDepth = 0
     this.transform.identity()
     this._blend = 'normal'
@@ -444,6 +620,7 @@ export class SpriteBatch implements Disposable {
       warnOnce('unbalanced-clip', 'end() called with unbalanced pushClip()/popClip()')
     }
     this.submit('end')
+    this.replayable = !this.midFrameFlush
     if (this.backdrop) {
       this.stats.backdropPasses = this.backdrop.passCount
       this.stats.backdropCopies = this.backdrop.copyCount
@@ -579,8 +756,9 @@ export class SpriteBatch implements Disposable {
       // an invisible border still takes its space, but paints nothing
     }
     const grad = o.gradient
-    let n = grad ? Math.min(grad.stops.length, MAX_GRADIENT_STOPS) : 0
-    if (grad && grad.stops.length > MAX_GRADIENT_STOPS) warnOnce('gradient-stops', `gradients support at most ${MAX_GRADIENT_STOPS} color stops; extra stops are dropped`)
+    const maxStops = this.maxGradientStops
+    let n = grad ? Math.min(grad.stops.length, maxStops) : 0
+    if (grad && grad.stops.length > maxStops) warnOnce('gradient-stops', `gradients support at most ${maxStops} color stops; extra stops are dropped`)
     if (n < 2) n = 0
     if (bgA <= 0 && !hasBorder && n === 0) return
     const rad = normalizeRadii(o.radii, w, h, this.tmpRadii)
@@ -649,7 +827,8 @@ export class SpriteBatch implements Disposable {
       d[i++] = 0
       d[i++] = 0
     }
-    this.writeShapeQuad(MODE_BOX, o.x + w / 2, o.y + h / 2, w / 2 + QUAD_MARGIN, h / 2 + QUAD_MARGIN, base, o.opacity ?? 1)
+    const boxMode = n === 0 ? MODE_BOX : n <= this.gradientSmall ? MODE_BOX_GRADIENT_SMALL : MODE_BOX_GRADIENT
+    this.writeShapeQuad(boxMode, o.x + w / 2, o.y + h / 2, w / 2 + QUAD_MARGIN, h / 2 + QUAD_MARGIN, base, o.opacity ?? 1)
     this.stats.boxes++
   }
 
@@ -743,7 +922,10 @@ export class SpriteBatch implements Disposable {
       qx = hw + QUAD_MARGIN
       qy = hh + QUAD_MARGIN
     }
-    this.writeShapeQuad(o.inset ? MODE_SHADOW_INSET : MODE_SHADOW_OUTER, o.x + hw, o.y + hh, qx, qy, base, o.opacity ?? 1)
+    // blur 0: no Gaussian, the shadow is a plain rounded-rect coverage (a cheap shader branch)
+    const hard = sigma <= 0
+    const shadowMode = o.inset ? (hard ? MODE_SHADOW_INSET_HARD : MODE_SHADOW_INSET) : hard ? MODE_SHADOW_OUTER_HARD : MODE_SHADOW_OUTER
+    this.writeShapeQuad(shadowMode, o.x + hw, o.y + hh, qx, qy, base, o.opacity ?? 1)
     this.stats.shadows++
   }
 
@@ -759,6 +941,31 @@ export class SpriteBatch implements Disposable {
     const w = o.width
     const h = o.height
     if (!(w > 0) || !(h > 0)) return false
+    let clip = 0
+    const sb = this.tmpBounds
+    if (this.shaderClip) {
+      // screen bounds of the (transformed) quad, with its anti-aliasing margin
+      const t = this.transform
+      let x0 = Infinity
+      let y0 = Infinity
+      let x1 = -Infinity
+      let y1 = -Infinity
+      for (let k = 0; k < 4; k++) {
+        const px = o.x + w / 2 + (k === 1 || k === 2 ? w / 2 + QUAD_MARGIN : -w / 2 - QUAD_MARGIN)
+        const py = o.y + h / 2 + (k >= 2 ? h / 2 + QUAD_MARGIN : -h / 2 - QUAD_MARGIN)
+        const x = t.isIdentity() ? px : t.applyX(px, py)
+        const y = t.isIdentity() ? py : t.applyY(px, py)
+        if (x < x0) x0 = x
+        if (x > x1) x1 = x
+        if (y < y0) y0 = y
+        if (y > y1) y1 = y
+      }
+      if (this.outsideClip(x0, y0, x1, y1)) return true
+      sb[0] = x0
+      sb[1] = y0
+      sb[2] = x1
+      sb[3] = y1
+    }
     const level = blur.levelFor(o.blur)
     const bit = 1 << level
     // One copy serves every blurred element — until one overlaps UI painted after that copy: it would blur (and cover) a stale
@@ -786,17 +993,19 @@ export class SpriteBatch implements Disposable {
     d[i++] = rad[3]
 
     this.assertBegun('fillBackdrop')
-    this.reserve(4, 6)
-    this.mode = MODE_BACKDROP
-    this.texFree = true
-    const seg = this.useState(this.whiteRegion.texture)
-    seg.backdrop |= bit
     const m = QUAD_MARGIN
     const cx = o.x + w / 2
     const cy = o.y + h / 2
     const hw = w / 2 + m
     const hh = h / 2 + m
     const t = this.transform
+    this.reserve(4, 6)
+    this.mode = MODE_BACKDROP
+    this.texFree = true
+    const seg = this.useState(this.whiteRegion.texture)
+    seg.backdrop |= bit
+    if (this.shaderClip) clip = this.clipEntryFor(sb[0]!, sb[1]!, sb[2]!, sb[3]!)
+    this.clipIdx = clip
     const f = this.vertices
     const alpha = o.opacity ?? 1
     const v = this.tmpV3
@@ -871,6 +1080,7 @@ export class SpriteBatch implements Disposable {
   }
 
   private readonly tmpRadii: [number, number, number, number] = [0, 0, 0, 0]
+  private readonly tmpBounds = [0, 0, 0, 0]
   private readonly bdX = [0, 0, 0, 0]
   private readonly effectiveClips: (ClipRect | null)[] = []
   /** Anti-aliasing margin of the quad being written (excluded from segment bounds). */
@@ -883,12 +1093,72 @@ export class SpriteBatch implements Disposable {
     this.mode = mode
     this.texFree = true
     this.dataIndex = data
-    this.boundsInset = mode === MODE_SHADOW_OUTER ? 0 : QUAD_MARGIN
+    this.boundsInset = mode === MODE_SHADOW_OUTER || mode === MODE_SHADOW_OUTER_HARD ? 0 : QUAD_MARGIN
     this.writeQuad(this.whiteRegion.texture, cx - hw, cy - hh, cx + hw, cy - hh, cx + hw, cy + hh, cx - hw, cy + hh, 0, 0, 1, 1, 1, 1, 1, alpha, hw, hh, 0, 0, 0, 0, 0, 0)
     this.mode = MODE_SPRITE
     this.texFree = false
     this.dataIndex = 0
     this.boundsInset = 0
+  }
+
+  // ───────────────────────────── shader clip ─────────────────────────────
+
+  /** True when a quad with these world bounds lies entirely outside the active clip (nothing of it can show). */
+  private outsideClip(minX: number, minY: number, maxX: number, maxY: number): boolean {
+    const c = this.currentClip
+    return c !== null && (maxX <= c.x || minX >= c.x + c.width || maxY <= c.y || minY >= c.y + c.height)
+  }
+
+  /**
+   * Clip entry (1-based) a quad with these bounds needs, or 0 when the clip cannot touch it: it lies inside the clip rectangle and, for a
+   * rounded clip, clear of all four corner squares.
+   */
+  private clipEntryFor(minX: number, minY: number, maxX: number, maxY: number): number {
+    const c = this.currentClip
+    if (!c) return 0
+    const round = this.currentRound
+    if (minX >= c.x && minY >= c.y && maxX <= c.x + c.width && maxY <= c.y + c.height) {
+      if (!round) return 0
+      const x0 = round.cx - round.hw
+      const y0 = round.cy - round.hh
+      const x1 = round.cx + round.hw
+      const y1 = round.cy + round.hh
+      const hit = (cornerX: number, cornerY: number, r: number): boolean => r > 0 && maxX > Math.min(cornerX, cornerX + r) && minX < Math.max(cornerX, cornerX + r) && maxY > Math.min(cornerY, cornerY + r) && minY < Math.max(cornerY, cornerY + r)
+      if (!hit(x0, y0, round.r0) && !hit(x1, y0, -round.r1) && !hit(x1, y1, -round.r2) && !hit(x0, y1, round.r3)) return 0
+    }
+    let entry = this.clipEntries.get(c)
+    if (entry === undefined) {
+      const table = this.clipTable!
+      const base = table.alloc(3)
+      const d = table.data
+      let i = base * 4
+      d[i++] = c.x
+      d[i++] = c.y
+      d[i++] = c.x + c.width
+      d[i++] = c.y + c.height
+      if (round) {
+        d[i++] = round.cx
+        d[i++] = round.cy
+        d[i++] = round.hw
+        d[i++] = round.hh
+        d[i++] = round.r0
+        d[i++] = round.r1
+        d[i++] = round.r2
+        d[i++] = round.r3
+      } else {
+        d[i++] = 0
+        d[i++] = 0
+        d[i++] = 1e9
+        d[i++] = 1e9
+        d[i++] = 0
+        d[i++] = 0
+        d[i++] = 0
+        d[i++] = 0
+      }
+      entry = base / 3 + 1
+      this.clipEntries.set(c, entry)
+    }
+    return entry
   }
 
   // ───────────────────────────── backdrop dirty tracking ─────────────────────────────
@@ -973,58 +1243,79 @@ export class SpriteBatch implements Disposable {
     }
   }
 
-  /** Switch segment state if needed; returns after `this.segments` tail matches (texture, blend, clip). */
+  /**
+   * Switch segment state if needed; returns after `this.segments` tail matches (texture, blend, clip) and `this.slot` names the
+   * quad's texture slot. A texture joins the current draw call while a slot is free, so alternating atlases stay in one segment.
+   */
   protected useState(tex: Texture): BatchSegment {
     const n = this.segmentCount
     let seg = n > 0 ? this.segments[n - 1]! : undefined
     const blend = this._blend
-    const clip = this.currentClip
+    // a shader clip never splits a draw call: the segment keeps no clip and quads carry their own clip entry
+    const clip = this.shaderClip ? null : this.currentClip
     const forceBreak = this.pendingBackdropBits !== 0
-    // Solid fills, boxes and shadows ignore their texture, so they extend the current segment instead of forcing a texture switch.
-    if (!forceBreak && seg && (seg.texture === tex || (this.texFree && seg.indexCount > 0)) && seg.blend === blend && seg.clip === clip) {
-      if (seg.loose && !this.texFree) {
-        seg.texture = tex
-        seg.loose = false
+    const texFree = this.texFree
+    const sameState = !forceBreak && seg !== undefined && seg.blend === blend && seg.clip === clip
+    if (sameState) {
+      if (texFree) {
+        // Solid fills, boxes and shadows ignore their texture: they extend the current segment, whatever it samples.
+        if (seg!.indexCount > 0) {
+          this.slot = 0
+          return seg!
+        }
+      } else {
+        const textures = seg!.textures
+        let k = textures.indexOf(tex)
+        if (k < 0 && textures.length < this.slotLimit) {
+          // a segment that so far holds only boxes / shadows (or has a free slot) takes the texture instead of splitting
+          k = textures.push(tex) - 1
+          if (k === 0) seg!.texture = tex
+          seg!.loose = false
+        }
+        if (k >= 0) {
+          this.slot = k
+          return seg!
+        }
       }
-      return seg
-    }
-    // a segment that so far holds only boxes / shadows can take the first real texture instead of forcing a draw-call split
-    if (!forceBreak && seg && seg.loose && !this.texFree && seg.indexCount > 0 && seg.blend === blend && seg.clip === clip) {
-      seg.texture = tex
-      seg.loose = false
-      return seg
     }
     if (seg && seg.indexCount > 0) {
-      const reason: FlushReason = forceBreak ? 'backdrop' : seg.texture !== tex ? 'texture' : seg.blend !== blend ? 'blend' : 'clip'
+      // same blend / clip here means every slot is taken
+      const reason: FlushReason = forceBreak ? 'backdrop' : seg.blend === blend && seg.clip === clip ? 'texture' : seg.blend !== blend ? 'blend' : 'clip'
       this.closeSegment(seg, reason)
       if (reason === 'texture') this.stats.textureSwitches++
       seg = undefined
     } else if (seg) {
       // empty tail segment: just retarget it
       seg.texture = tex
+      seg.textures.length = 0
+      if (!texFree) seg.textures.push(tex)
       seg.blend = blend
       seg.clip = clip
-      seg.loose = this.texFree
+      seg.loose = texFree
       seg.minX = seg.minY = Infinity
       seg.maxX = seg.maxY = -Infinity
       seg.backdrop |= this.takeBackdropBits()
       seg.backdropEpoch = this.backdropEpoch
+      this.slot = 0
       return seg
     }
     seg = this.segmentPool[this.segmentCount]
-    if (!seg) this.segmentPool[this.segmentCount] = seg = { texture: null, blend: 'normal', clip: null, indexStart: 0, indexCount: 0, backdrop: 0, backdropEpoch: 0, loose: false, minX: 0, minY: 0, maxX: 0, maxY: 0 }
+    if (!seg) this.segmentPool[this.segmentCount] = seg = { texture: null, textures: [], blend: 'normal', clip: null, indexStart: 0, indexCount: 0, backdrop: 0, backdropEpoch: 0, loose: false, minX: 0, minY: 0, maxX: 0, maxY: 0 }
     this.segments[this.segmentCount] = seg
     this.segmentCount++
     seg.texture = tex
+    seg.textures.length = 0
+    if (!texFree) seg.textures.push(tex)
     seg.blend = blend
     seg.clip = clip
     seg.indexStart = this.indexCount
     seg.indexCount = 0
-    seg.loose = this.texFree
+    seg.loose = texFree
     seg.minX = seg.minY = Infinity
     seg.maxX = seg.maxY = -Infinity
     seg.backdrop = this.takeBackdropBits()
     seg.backdropEpoch = this.backdropEpoch
+    this.slot = 0
     return seg
   }
 
@@ -1071,8 +1362,6 @@ export class SpriteBatch implements Disposable {
     if (isDev() && (tex as { image?: unknown }).image == null && !(tex as { isRenderTargetTexture?: boolean }).isRenderTargetTexture) {
       warnOnce(`missing-texture-${tex.uuid}`, 'drawing a texture with no image data (missing or disposed texture?)')
     }
-    this.reserve(4, 6)
-    const seg = this.useState(tex)
     const t = this.transform
     if (!t.isIdentity()) {
       const tx0 = t.applyX(x0, y0)
@@ -1096,6 +1385,17 @@ export class SpriteBatch implements Disposable {
     const by0 = Math.min(y0, y1, y2, y3)
     const bx1 = Math.max(x0, x1, x2, x3)
     const by1 = Math.max(y0, y1, y2, y3)
+    if (this.shaderClip && this.outsideClip(bx0, by0, bx1, by1)) return
+    this.reserve(4, 6)
+    const seg = this.useState(tex)
+    this.clipIdx = this.shaderClip ? this.clipEntryFor(bx0, by0, bx1, by1) : 0
+    // sprite / solid / glyph quads that carry a rounded-rect SDF take the shaped shader branch; plain ones never pay for it
+    const baseMode = this.mode
+    if (hw > 0) {
+      if (baseMode === MODE_SPRITE) this.mode = MODE_SPRITE_SHAPED
+      else if (baseMode === MODE_SOLID) this.mode = MODE_SOLID_SHAPED
+      else if (baseMode === MODE_GLYPH) this.mode = MODE_GLYPH_SHAPED
+    }
     if (this.dirtyTracking) this.markDirty(bx0, by0, bx1, by1)
     // true bounds exclude the 1px anti-aliasing margin of box quads (`boundsInset`)
     const inset = this.boundsInset
@@ -1126,6 +1426,7 @@ export class SpriteBatch implements Disposable {
     this.indexCount = k
     seg.indexCount += 6
     this.stats.sprites++
+    this.mode = baseMode
   }
 
   protected vertex(
@@ -1169,7 +1470,7 @@ export class SpriteBatch implements Disposable {
     f[i + OFFSET_BORDER + 1] = bg
     f[i + OFFSET_BORDER + 2] = bb
     f[i + OFFSET_BORDER + 3] = ba
-    f[i + OFFSET_MODE] = this.mode
+    f[i + OFFSET_MODE] = this.mode + this.slot * MODE_RADIX + this.clipIdx * CLIP_RADIX
     f[i + OFFSET_DATA] = this.dataIndex
     return i + VERTEX_STRIDE
   }
@@ -1178,10 +1479,36 @@ export class SpriteBatch implements Disposable {
   protected writeTriangles(tex: Texture, positions: ArrayLike<number>, uvs: ArrayLike<number>, triangles: ArrayLike<number>, r: number, g: number, b: number, a: number): void {
     this.assertBegun('drawPolygon')
     const vn = positions.length >> 1
-    this.reserve(vn, triangles.length)
-    const seg = this.useState(tex)
     const t = this.transform
     const ident = t.isIdentity()
+    let clip = 0
+    let pass = true
+    if (this.shaderClip && vn > 0) {
+      let cx0 = Infinity
+      let cy0 = Infinity
+      let cx1 = -Infinity
+      let cy1 = -Infinity
+      for (let n = 0; n < vn; n++) {
+        const px = positions[n * 2]!
+        const py = positions[n * 2 + 1]!
+        const x = ident ? px : t.applyX(px, py)
+        const y = ident ? py : t.applyY(px, py)
+        if (x < cx0) cx0 = x
+        if (x > cx1) cx1 = x
+        if (y < cy0) cy0 = y
+        if (y > cy1) cy1 = y
+      }
+      pass = !this.outsideClip(cx0, cy0, cx1, cy1)
+      if (pass) {
+        this.reserve(vn, triangles.length)
+        clip = this.clipEntryFor(cx0, cy0, cx1, cy1)
+      }
+    } else {
+      this.reserve(vn, triangles.length)
+    }
+    if (!pass) return
+    const seg = this.useState(tex)
+    this.clipIdx = clip
     let minX = Infinity
     let minY = Infinity
     let maxX = -Infinity
@@ -1225,12 +1552,12 @@ export class SpriteBatch implements Disposable {
 
   // ───────────────────────────── submission ─────────────────────────────
 
-  /** Next unused mesh for `material` this frame (created on demand, bound to that material forever). */
-  private acquireMesh(material: MeshBasicNodeMaterial): Mesh {
-    let pool = this.meshPools.get(material)
-    if (!pool) this.meshPools.set(material, (pool = []))
-    const i = this.meshCursor.get(material) ?? 0
-    this.meshCursor.set(material, i + 1)
+  /** Next unused mesh for `blend` this frame (created on demand; mesh `i` is bound to material `i` of that blend forever). */
+  private acquireMesh(blend: BlendMode): Mesh {
+    let pool = this.meshPools.get(blend)
+    if (!pool) this.meshPools.set(blend, (pool = []))
+    const i = this.meshCursor.get(blend) ?? 0
+    this.meshCursor.set(blend, i + 1)
     let mesh = pool[i]
     if (!mesh) {
       const geometry = new BufferGeometry()
@@ -1244,7 +1571,9 @@ export class SpriteBatch implements Disposable {
       geometry.setAttribute('aData', new InterleavedBufferAttribute(this.interleaved, 1, OFFSET_DATA))
       geometry.setIndex(this.indexAttribute)
       geometry.addEventListener('dispose', this.onGeometryDispose)
-      mesh = new Mesh(geometry, material)
+      // a classic WebGLRenderer links one GL program for all batch materials of a blend mode (see `BatchNodeMaterial.sharedProgramKey`)
+      const shared = (this.renderer as { isWebGLRenderer?: boolean } | null)?.isWebGLRenderer === true
+      mesh = new Mesh(geometry, this.getMaterials().get(blend, i, shared))
       mesh.frustumCulled = false
       mesh.matrixAutoUpdate = false
       mesh.visible = false
@@ -1272,28 +1601,66 @@ export class SpriteBatch implements Disposable {
     this.indexAttribute.addUpdateRange(0, this.indexCount)
     this.indexAttribute.needsUpdate = true
     this.table.upload()
+    this.clipTable?.upload()
 
-    for (const mesh of this.meshes) mesh.visible = false
-    this.meshCursor.clear()
-    this.segMeshes.length = 0
-    for (let i = 0; i < this.segmentCount; i++) {
-      const seg = this.segments[i]!
-      const mesh = this.acquireMesh(this.materials.get(seg.texture!, seg.blend))
-      mesh.geometry.setDrawRange(seg.indexStart, seg.indexCount)
-      mesh.renderOrder = i
-      mesh.visible = !this.renderer
-      this.segMeshes[i] = mesh
-    }
-
-    if (this.renderer && this.camera) this.renderGroups(this.renderer, this.camera)
+    this.drawSegments()
 
     if (reason === 'capacity' || reason === 'explicit') {
       // Everything buffered so far has been drawn; keep filling from the start.
+      this.midFrameFlush = true
       this.vertexCount = 0
       this.indexCount = 0
       this.segmentCount = 0
       this.segments.length = 0
       this.table.reset()
+      this.clipTable?.reset()
+      this.clipEntries.clear()
+    }
+  }
+
+  /** Bind every segment to a mesh (+ its texture slots) and render them. The vertex / index / table data must already be uploaded. */
+  private drawSegments(): void {
+    for (const mesh of this.meshes) mesh.visible = false
+    this.meshCursor.clear()
+    this.segMeshes.length = 0
+    for (let i = 0; i < this.segmentCount; i++) {
+      const seg = this.segments[i]!
+      const mesh = this.acquireMesh(seg.blend)
+      // this draw call's texture table goes into the mesh's own material (unused slots keep the placeholder)
+      ;(mesh.material as BatchNodeMaterial).setTextures(seg.textures, this.getMaterials().placeholders)
+      this.stats.texturesBound += seg.textures.length
+      mesh.geometry.setDrawRange(seg.indexStart, seg.indexCount)
+      mesh.renderOrder = i
+      mesh.visible = !this.renderer
+      this.segMeshes[i] = mesh
+    }
+    if (this.renderer && this.camera) this.renderGroups(this.renderer, this.camera)
+  }
+
+  /**
+   * True when the last finished frame can be drawn again as it is ({@link replay}): it needs a renderer, and the frame must not have
+   * been split by a capacity / explicit flush (their buffers are gone).
+   */
+  get canReplay(): boolean {
+    return !this._begun && this.replayable && this.indexCount > 0 && this.renderer !== null && this.camera !== null && !this.disposed
+  }
+
+  /**
+   * Draw the previous frame again without rebuilding it: no `begin()` / draw calls / `end()`, and the buffers are not re-uploaded.
+   * For a UI that did not change between frames. `stats` keeps the build counters (sprites, boxes, …) and refreshes the render ones
+   * (`drawCalls`, `renderPasses`, `texturesBound`, backdrop counters).
+   */
+  replay(): void {
+    if (!this.canReplay) throw new Error('[three-2d] SpriteBatch.replay() needs a finished frame drawn with a renderer (see canReplay)')
+    const s = this.stats
+    s.drawCalls = 0
+    s.renderPasses = 0
+    s.texturesBound = 0
+    this.backdrop?.beginFrame()
+    this.drawSegments()
+    if (this.backdrop) {
+      s.backdropPasses = this.backdrop.passCount
+      s.backdropCopies = this.backdrop.copyCount
     }
   }
 
@@ -1412,8 +1779,12 @@ export class SpriteBatch implements Disposable {
       this.scene.remove(mesh)
     }
     this.meshes.length = 0
-    this.materials.dispose()
+    this.materials?.dispose()
+    this.materials = null
+    for (const t of this.placeholders) t.dispose()
+    this.placeholders = []
     this.table.dispose()
+    this.clipTable?.dispose()
     this.backdrop?.dispose()
     this.whiteTexture?.dispose()
     this.whiteTexture = null

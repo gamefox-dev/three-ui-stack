@@ -1,5 +1,34 @@
 # @implicit-invocation/three-ui
 
+## 0.4.0
+
+### Minor Changes
+
+- Cheaper UI batches (all defaults stay compatible; `maxTextures: 1` restores the old draw-call behaviour).
+  
+  three-2d
+  - **Multi-texture draw calls**: a draw call samples up to `maxTextures` textures (`'auto'` from the renderer, up to 8). Each quad carries its slot and the shader reads exactly one texture; atlas pages, avatars and fonts share draw calls. New stats `texturesBound`; `BatchSegment.textures`.
+  - **One shader program for all textures**: the texture is a per-draw value, not part of the shader, so a classic `WebGLRenderer` + `WebGLNodesHandler` links one GL program per blend mode instead of one per texture (no more compile hitches for every new image).
+  - **`NinePatch` scale** (`new NinePatch(region, l, r, t, b, { scale })`, `setScale()`, `draw(…, scale)`): borders, `minWidth`/`minHeight` and padding in logical units, half-texel UV inset against seams; `TextureAtlas` parses `split:` / `pad:` and has `createPatch(name, scale)`.
+  - **Gradient cost**: `maxGradientStops` option (2…8); gradients with ≤ 3 stops use a cheaper shader path.
+  - **Cheaper shader paths**: sprite / glyph / 9-patch quads fetch one texel and touch no table; plain and shaped (rounded/bordered) sprites are separate modes; shadows with `blur: 0` skip the Gaussian; the box / clip table fetches no longer carry a texture-matrix and flip uniform each.
+  - **`clip: 'shader'`**: clip in the fragment shader (anti-aliased, optional rounded corners via `pushClip(x, y, w, h, radii)`), no render pass or draw-call split per clip.
+  - **`batch.canReplay` / `batch.replay()`**: draw the previous finished frame again without rebuilding it.
+  - Fix: gradient boxes had aliased (unsmoothed) rounded corners.
+  
+  three-ui
+  - `createThreeUI({ maxTextures, maxGradientStops, clip, replayStaticFrames })`; `ui.stats.texturesBound`, `textureSwitches`, `replayed`. `render()` replays the previous frame when nothing changed.
+  - `NinePatchView`: `patchScale`, scaled minimum size, and default padding from an atlas `pad:`; a component default padding edge no longer beats an author's `padding` shorthand.
+  - With `clip: 'shader'`, `overflow: hidden` + `border-radius` round-clips children.
+  
+  three-ui-react
+  - `<NinePatch patchScale>`.
+
+### Patch Changes
+
+- Updated dependencies
+  - @implicit-invocation/three-2d@0.4.0
+
 ## 0.3.0
 
 ### Minor Changes

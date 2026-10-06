@@ -14,7 +14,7 @@ export {
   type AtlasRegionData,
   type TextureResolver,
 } from './texture/TextureAtlas'
-export { NinePatch } from './texture/NinePatch'
+export { NinePatch, type NinePatchOptions } from './texture/NinePatch'
 
 export { Animation, type PlayMode } from './animation/Animation'
 export { Sprite } from './sprite/Sprite'

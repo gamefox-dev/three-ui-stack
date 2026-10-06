@@ -51,6 +51,8 @@ export interface ImagePaint {
 
 export interface NinePatchPaint {
   tint?: Color4
+  /** Logical units per source pixel for this draw (default: the patch's own scale). */
+  scale?: number
 }
 
 /** Outline and shadow of a text run. Both need a font baked with a stroke (distance) channel; see `three-2d-font --stroke`. */
@@ -85,7 +87,8 @@ export interface UIDrawContext {
   ninePatch(patch: NinePatch, rect: Rect, paint?: NinePatchPaint): void
   text(layout: GlyphLayout, x: number, y: number, paint: TextPaint): void
 
-  pushClip(rect: Rect): void
+  /** Clip to `rect`. `radii` (TL, TR, BR, BL) round its corners; only a batch with `clip: 'shader'` can honour them. */
+  pushClip(rect: Rect, radii?: Radii4): void
   popClip(): void
 
   pushTransform(transform: Affine2): void

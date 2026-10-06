@@ -67,7 +67,7 @@ export function createNode(type: HostType, props: HostProps): UINode {
       node = new AnimatedImage({ ...base, ...(props.resizeMode ? { resizeMode: props.resizeMode as never } : {}), ...(props.scale ? { scale: props.scale as number } : {}) })
       break
     case 'tui-ninepatch':
-      node = new NinePatchView(base)
+      node = new NinePatchView({ ...base, ...(props.patchScale ? { patchScale: props.patchScale as number } : {}) })
       break
     case 'tui-scrollview':
       node = new ScrollView({ ...base, horizontal: props.horizontal === true })
@@ -116,6 +116,7 @@ export function applyProps(node: UINode, type: HostType, prev: HostProps, next: 
     }
     case 'tui-ninepatch':
       if (prev.patch !== next.patch) (node as NinePatchView).setPatch((next.patch as never) ?? null)
+      if (prev.patchScale !== next.patchScale) (node as NinePatchView).setPatchScale(next.patchScale as number | undefined)
       break
     case 'tui-scrollview': {
       const s = node as ScrollView

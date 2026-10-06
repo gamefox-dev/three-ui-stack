@@ -31,6 +31,8 @@ export function loadFixtureFontsWithDisplay(): FontRegistry {
 }
 
 const MODE_NAMES = ['sprite', 'solid', 'box', 'shadow', 'inset', 'glyphfx', 'glyph', 'backdrop']
+/** Shader mode ids ≥ 8 are cost variants of a base mode (gradient size, shaped sprite, hard shadow): dumps show the base name. */
+const BASE_MODE = [0, 1, 2, 3, 4, 5, 6, 7, 2, 2, 0, 1, 6, 3, 4]
 
 /** Human-readable dump of what the last frame wrote into the batch: one line per quad (+ table entry for box-like quads). */
 export function dumpBatch(ui: ThreeUI): string[] {
@@ -42,7 +44,7 @@ export function dumpBatch(ui: ThreeUI): string[] {
   for (let q = 0; q < b.vertexCount / 4; q++) {
     const v0 = q * 4 * stride
     const v2 = (q * 4 + 2) * stride
-    const mode = f[v0 + 19]!
+    const mode = BASE_MODE[f[v0 + 19]! % 16]!
     const name = MODE_NAMES[mode] ?? `mode${mode}`
     let line = `${name} (${r(f[v0]!)},${r(f[v0 + 1]!)})-(${r(f[v2]!)},${r(f[v2 + 1]!)}) a=${r(f[v0 + 8]!)}`
     if (mode >= 2 && mode <= 4) {

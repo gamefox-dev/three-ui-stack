@@ -102,7 +102,7 @@ export type AnimatedImageProps = Omit<CommonProps<AnimatedImage>, 'children'> &
     scale: number
   }>
 
-export type NinePatchProps = CommonProps<NinePatchView> & Opt<{ patch: NinePatch | null }>
+export type NinePatchProps = CommonProps<NinePatchView> & Opt<{ patch: NinePatch | null; patchScale: number }>
 
 export type ScrollViewProps = CommonProps<ScrollView> &
   Opt<{

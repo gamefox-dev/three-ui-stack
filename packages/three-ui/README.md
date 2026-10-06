@@ -150,7 +150,7 @@ What the classic path needed (all handled inside `@implicit-invocation/three-2d`
 | Feature | Draw calls | Per-frame work |
 | --- | --- | --- |
 | Box (radii, border, background) | 0 extra — joins the current segment | 1 quad + 6 table texels; one SDF per fragment |
-| Gradient | 0 | + (stops + ⌈stops/4⌉) texels (≤ 8 stops); ≤ 16 table fetches per fragment |
+| Gradient | 0 | + (stops + ⌈stops/4⌉) texels (≤ 8 stops); ≤ 3 stops use a 2-mix loop, more up to `maxGradientStops` |
 | Shadow / ring / inset layer | 0 | 1 quad + 6 texels per layer; 4 Gaussian rows per fragment over the blur-expanded quad |
 | Text stroke · text shadow | 0 | ×2 glyph quads for a stroke, +1 pass per shadow layer |
 | Image drop-shadow | 0 | +1 quad per layer |
@@ -161,9 +161,27 @@ What the classic path needed (all handled inside `@implicit-invocation/three-2d`
 
 Box data lives in a per-frame float texture (`BoxTable`, `RGBA32F`, nearest-fetched); boxes are written as ordinary quads (not hardware-instanced) so they share segments, clipping and texture handling with text and images.
 
+### Draw-call and pass budget
+
+```ts
+createThreeUI({
+  renderer,
+  maxTextures: 'auto',        // default: atlas pages, avatars and fonts share draw calls (up to 8 textures each); 1 = one per draw
+  maxGradientStops: 3,        // cap the gradient shader's loop (2…8, default 8; ≤ 3-stop gradients are already cheap)
+  clip: 'shader',             // overflow clipping in the fragment shader: no render pass per clip, rounded corners honoured
+  replayStaticFrames: true,   // default: render() redraws the previous frame's batch when nothing changed
+})
+```
+
+`ui.stats` reports `drawCalls`, `renderPasses`, `texturesBound`, `textureSwitches` and `replayed` (true when the last `render()` replayed). `clip: 'scissor'` (default) uses one `renderer.render()` per distinct clip rectangle; with `'shader'` a node with `overflow: hidden` and `border-radius` also round-clips its children.
+
+### Nine-patch frames for 2×/3× art
+
+`NinePatchView` takes a `NinePatch` from `@implicit-invocation/three-2d` (`atlas.createPatch('panel', 0.5)` for art baked at 2×). Its minimum size and — when the atlas region has `pad:` — its default padding come from the scaled patch (an explicit `padding*` style wins); `patchScale` overrides the patch's scale for one view.
+
 ### Limitations
 
-`overflow: hidden` clips to the node's rectangle (a rounded card does not round-clip its children — give `Image`s their own radius) · one border color (no per-side colors) · elliptical `border-radius` (`a / b`) uses the horizontal radii · image radii are one value · `opacity` multiplies each primitive (no offscreen group: overlapping children of a translucent parent show through each other) · gradients: ≤ 8 stops, no `repeating-*`/conic, no color hints · `drop-shadow` only on `Image`s and without blur · backdrop blur needs the default framebuffer and `renderer.copyFramebufferToTexture` (verified on WebGPU and WebGL2; not on a React Native device) · CSS `filter: blur()/brightness()…` on the node itself is not supported (only `backdrop-*`).
+`overflow: hidden` clips to the node's rectangle (with `clip: 'scissor'` a rounded card does not round-clip its children — give `Image`s their own radius, or use `clip: 'shader'`) · one border color (no per-side colors) · elliptical `border-radius` (`a / b`) uses the horizontal radii · image radii are one value · `opacity` multiplies each primitive (no offscreen group: overlapping children of a translucent parent show through each other) · gradients: ≤ 8 stops, no `repeating-*`/conic, no color hints · `drop-shadow` only on `Image`s and without blur · backdrop blur needs the default framebuffer and `renderer.copyFramebufferToTexture` (verified on WebGPU and WebGL2; not on a React Native device) · CSS `filter: blur()/brightness()…` on the node itself is not supported (only `backdrop-*`).
 
 ## Runtime support
 

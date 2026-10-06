@@ -50,6 +50,17 @@ Lower level: `batch.begin(camera)` → `batch.draw…` → `batch.end()`. The **
 
 Coordinate convention: origin top-left, **+y down**, logical pixels.
 
+### Nine-patches for high-DPI art
+
+```ts
+// art baked at 2×: one source pixel is half a logical unit
+const patch = new NinePatch(region, 16, 16, 16, 16, { scale: 0.5 })      // or atlas.createPatch('panel', 0.5)
+patch.minWidth      // 16 — borders, minWidth, minHeight and padding are in logical units
+patch.draw(batch, x, y, w, h)           // patch.draw(batch, x, y, w, h, 0.25) overrides the scale for one draw
+```
+
+`TextureAtlas` reads libGDX `split:` (borders) and `pad:` (content padding) lines; `atlas.createPatch(name, scale)` builds the patch and `patch.padding` (`[top, right, bottom, left]`, scaled) is the content padding. Scaled patches inset every cell's UVs by half a texel so linear filtering never reads a neighbouring cell (`uvInset: 'auto'` — a 1:1 patch is not inset because it samples texel centers exactly; pass a number to force one). `tint` / `setColor` work as before.
+
 ### Boxes, shadows and the box table
 
 ```ts
@@ -62,9 +73,32 @@ Each box is **one 4-vertex quad**; everything else about it (radii, border width
 
 `batch.fillBackdrop({ …, blur })` paints the blurred pixels behind a rounded rect (`new SpriteBatch({ renderer, backdrop: 'low' | 'full' })`): one framebuffer copy per capture generation + a dual-Kawase chain, see `BackdropBlur`.
 
+### Multi-texture draw calls
+
+A draw call samples up to `maxTextures` textures: each quad carries its texture *slot* in its vertex data and the shader reads exactly that one (a branch over the slot index, one fetch — never all of them). Atlas pages, avatars and bitmap fonts therefore share draw calls instead of splitting them at every change.
+
+```ts
+new SpriteBatch({ renderer })                  // maxTextures: 'auto' — the renderer's texture-unit budget, up to 8
+new SpriteBatch({ renderer, maxTextures: 1 })  // one texture per draw call (the pre-0.4 behaviour)
+```
+
+`'auto'` needs a renderer that reports its limits (classic `WebGLRenderer`, `WebGPURenderer`); a bare batch or an unknown renderer uses 1. Which texture sits in a slot is a per-draw value, **not** part of the shader: shaders — and a classic `WebGLRenderer`'s GL programs — depend only on the blend mode, so new textures never compile anything. Counters: `textureSwitches` (a texture change that had no free slot), `texturesBound` (slots bound over all draw calls of the frame).
+
+### Clipping: scissor or shader
+
+`pushClip` clips with the hardware scissor by default, which costs one `renderer.render()` per distinct clip rectangle (≈ 1 ms of fixed CPU on a phone). With `new SpriteBatch({ renderer, clip: 'shader' })` clipping happens in the fragment shader instead: it is anti-aliased, never splits a draw call or adds a render pass, quads fully inside their clip cost nothing extra, quads fully outside are skipped, and `pushClip(x, y, w, h, radii)` rounds the clip's corners. (Nested clips intersect their rectangles; only the innermost rounded rectangle is honoured.)
+
+### Gradient cost
+
+`maxGradientStops` (2…8, default 8) caps the gradient shader's loop. Gradients with ≤ 3 stops always take a cheaper path (2 mixes instead of 7), and boxes without a gradient never pay for the gradient code. `maxGradientStops: 3` also makes every gradient take the cheap path (extra stops are dropped). Shadows with `blur: 0` skip the Gaussian and cost two SDF evaluations.
+
+### Replaying a frame
+
+`batch.canReplay` / `batch.replay()` draw the previous finished frame again without rebuilding or re-uploading it (the frame must not have been split by a capacity or explicit flush). `@implicit-invocation/three-ui` uses it for UIs that did not change.
+
 ### Flush rules & counters
 
-A batch starts a new segment (draw call) on a texture, blend or clip change; it submits on `end()`, `flush()` or capacity exhaustion. `batch.stats` exposes `sprites`, `boxes`, `shadows`, `flushes`, `drawCalls`, `renderPasses`, `glyphs`, `clipChanges`, `backdropCopies`, `backdropPasses`. Solid fills, boxes and shadows never force a texture switch (a segment that holds only those even adopts the first textured quad's texture).
+A batch starts a new segment (draw call) when every texture slot is taken, or on a blend change or — in scissor mode — a clip change; it submits on `end()`, `flush()` or capacity exhaustion. `batch.stats` exposes `sprites`, `boxes`, `shadows`, `flushes`, `drawCalls`, `renderPasses`, `glyphs`, `clipChanges`, `textureSwitches`, `texturesBound`, `backdropCopies`, `backdropPasses`. Solid fills, boxes and shadows never force a texture switch (a segment that holds only those even adopts the first textured quad's texture).
 
 ## Runtime support
 

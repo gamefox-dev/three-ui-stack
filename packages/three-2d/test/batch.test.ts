@@ -79,7 +79,7 @@ describe('SpriteBatch', () => {
     expect(batch.stats.flushReasons.texture).toBe(0)
     const v = (batch as unknown as { vertices: Float32Array }).vertices
     expect(v[19]).toBe(0) // textured quad
-    expect(v[4 * VERTEX_STRIDE + 19]).toBe(1) // solid quad
+    expect(v[4 * VERTEX_STRIDE + 19]).toBe(11) // rounded solid quad (the shaped variant of mode 1)
     batch.dispose()
   })
 

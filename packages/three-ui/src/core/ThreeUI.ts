@@ -43,6 +43,24 @@ export interface ThreeUIOptions {
    * filter. Needs a renderer with `copyFramebufferToTexture` (Three's `WebGPURenderer`); fixed at construction.
    */
   backdropBlur?: BackdropQuality
+  /**
+   * Textures one draw call can sample (`'auto'`, the default with a renderer: the renderer's texture-unit budget, up to 8; `1`: one
+   * texture per draw call). Atlas pages, avatars and fonts then share draw calls instead of splitting them. Fixed at construction.
+   */
+  maxTextures?: number | 'auto'
+  /** Gradient shader cost cap, 2…8 (default 8). Gradients with ≤ 3 stops already take a cheaper loop; 3 caps the rest at 3 stops. */
+  maxGradientStops?: number
+  /**
+   * `overflow: hidden` / scroll clipping: `'scissor'` (default; hardware scissor, one `renderer.render()` per distinct clip rect) or
+   * `'shader'` (clipped in the fragment shader — anti-aliased, follows the box's rounded corners — so clips add no render passes and
+   * never split a draw call). Fixed at construction.
+   */
+  clip?: 'scissor' | 'shader'
+  /**
+   * When nothing changed since the last frame, `render()` draws the previous frame's batch again instead of repainting the tree
+   * (default true; needs a renderer). `ui.stats.replayed` tells which happened.
+   */
+  replayStaticFrames?: boolean
 }
 
 /** Debug counters (spec §19.5). Style/layout counters are cumulative; paint counters describe the last frame. */
@@ -55,6 +73,9 @@ export interface UIStats {
   flushes: number
   drawCalls: number
   renderPasses: number
+  /** Last frame: texture slots bound over all draw calls, and texture changes that split a draw call. */
+  texturesBound: number
+  textureSwitches: number
   sprites: number
   glyphs: number
   clipChanges: number
@@ -65,6 +86,8 @@ export interface UIStats {
   backdropPasses: number
   nodesPainted: number
   nodesCulled: number
+  /** Last `render()`: true when it replayed the previous frame's batch instead of repainting the tree. */
+  replayed: boolean
 }
 
 export type ThemeStyles = Partial<Record<NodeKind | 'root', Style>>
@@ -90,6 +113,8 @@ export class ThreeUI implements Disposable {
     flushes: 0,
     drawCalls: 0,
     renderPasses: 0,
+    texturesBound: 0,
+    textureSwitches: 0,
     sprites: 0,
     glyphs: 0,
     clipChanges: 0,
@@ -99,6 +124,7 @@ export class ThreeUI implements Disposable {
     backdropPasses: 0,
     nodesPainted: 0,
     nodesCulled: 0,
+    replayed: false,
   }
   /** Internal parent of the user root; sized to the viewport so `flex: 1` roots fill the screen. */
   readonly viewRoot: View
@@ -120,6 +146,7 @@ export class ThreeUI implements Disposable {
   private appliedPixelRatio = -1
   private _updatePending = true
   private disposed = false
+  private replayStatic = true
   /** @internal */ _paintDirty = true
 
   constructor(options: ThreeUIOptions) {
@@ -138,7 +165,11 @@ export class ThreeUI implements Disposable {
     this.batch = new PolygonSpriteBatch({
       ...(options.renderer ? { renderer: options.renderer, backdrop: options.backdropBlur ?? 'full' } : {}),
       maxSprites: options.maxSprites ?? (options.renderer ? 8192 : 16383),
+      ...(options.maxTextures !== undefined ? { maxTextures: options.maxTextures } : {}),
+      ...(options.maxGradientStops !== undefined ? { maxGradientStops: options.maxGradientStops } : {}),
+      ...(options.clip ? { clip: options.clip } : {}),
     })
+    this.replayStatic = options.replayStaticFrames !== false
     this.ctx = new BatchDrawContext(this.batch, this.counters)
     this.engine = new AnimationEngine(this)
     this.viewRoot = new View({ name: 'viewRoot', style: { width: options.width, height: options.height } })
@@ -358,6 +389,14 @@ export class ThreeUI implements Disposable {
       renderer.autoClear = auto
     }
     const batch = this.batch
+    if (this.replayStatic && !this._paintDirty && this.tickables.size === 0 && !this.engine.hasRunning && batch.canReplay) {
+      // nothing changed: the previous frame's quads are still in the batch buffers
+      batch.replay()
+      this.stats.replayed = true
+      this.copyBatchStats()
+      return
+    }
+    this.stats.replayed = false
     batch.stats.reset()
     this.counters.paintOps = 0
     this.paintStats.nodesPainted = 0
@@ -368,12 +407,18 @@ export class ThreeUI implements Disposable {
     paintTree(this.viewRoot, this.ctx, this.environment.viewport.width, this.environment.viewport.height, this.paintStats)
     batch.end()
     this._paintDirty = false
+    this.copyBatchStats()
+  }
+
+  private copyBatchStats(): void {
     const s = this.stats
-    const b = batch.stats
+    const b = this.batch.stats
     s.paintOps = this.counters.paintOps
     s.flushes = b.flushes
     s.drawCalls = b.drawCalls
     s.renderPasses = b.renderPasses
+    s.texturesBound = b.texturesBound
+    s.textureSwitches = b.textureSwitches
     s.sprites = b.sprites
     s.glyphs = b.glyphs
     s.clipChanges = b.clipChanges

@@ -141,7 +141,7 @@
     },
     "packages/three-2d": {
       "name": "@implicit-invocation/three-2d",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "devDependencies": {
         "@types/node": "catalog:",
         "@types/three": "catalog:",
@@ -155,7 +155,7 @@
     },
     "packages/three-2d-font": {
       "name": "@implicit-invocation/three-2d-font",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "bin": {
         "three-2d-font": "./bin/three-2d-font.js",
       },
@@ -176,7 +176,7 @@
     },
     "packages/three-ui": {
       "name": "@implicit-invocation/three-ui",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
         "@implicit-invocation/three-2d": "workspace:^",
       },
@@ -195,7 +195,7 @@
     },
     "packages/three-ui-react": {
       "name": "@implicit-invocation/three-ui-react",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
         "@implicit-invocation/three-2d": "workspace:^",
         "@implicit-invocation/three-ui": "workspace:^",
@@ -218,7 +218,7 @@
     },
     "packages/three-ui-tailwind": {
       "name": "@implicit-invocation/three-ui-tailwind",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "bin": {
         "three-ui-tailwind": "./bin/three-ui-tailwind.js",
       },

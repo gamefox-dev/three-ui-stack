@@ -43,6 +43,8 @@ export class RenderStats {
   glyphs = 0
   clipChanges = 0
   textureSwitches = 0
+  /** Texture slots bound over all draw calls of the frame (a draw call with 3 textures adds 3). */
+  texturesBound = 0
   flushReasons: Record<FlushReason, number> = {
     texture: 0,
     blend: 0,
@@ -65,6 +67,7 @@ export class RenderStats {
     this.glyphs = 0
     this.clipChanges = 0
     this.textureSwitches = 0
+    this.texturesBound = 0
     this.flushReasons.texture = 0
     this.flushReasons.blend = 0
     this.flushReasons.clip = 0

@@ -1,6 +1,6 @@
 {
   "name": "@implicit-invocation/three-2d-font",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "TTF/OTF to bitmap-font atlas tooling for three-2d: portable parser, rasterizers, atlas packer and CLI.",
   "license": "MIT",
   "type": "module",

@@ -1,4 +1,4 @@
-import { Color4, TextureRegion, type Affine2, type BatchSegment, type GlyphLayout, type NinePatch, type PolygonSpriteBatch, type Rect } from '@implicit-invocation/three-2d'
+import { Color4, TextureRegion, type Radii4, type Affine2, type BatchSegment, type GlyphLayout, type NinePatch, type PolygonSpriteBatch, type Rect } from '@implicit-invocation/three-2d'
 import { warnOnce } from '../dev'
 import type { BackdropPaint, BoxPaint, ImagePaint, NinePatchPaint, RectPaint, ShadowPaint, TextPaint, UIDrawContext } from './DrawContext'
 
@@ -139,7 +139,7 @@ export class BatchDrawContext implements UIDrawContext {
     const pa = prev.a
     const t = paint.tint ?? WHITE
     batch.setColorRGBA(t.r, t.g, t.b, t.a * this.opacity)
-    patch.draw(batch, rect.x, rect.y, rect.width, rect.height)
+    patch.draw(batch, rect.x, rect.y, rect.width, rect.height, paint.scale ?? patch.scale)
     batch.setColorRGBA(pr, pg, pb, pa)
   }
 
@@ -258,8 +258,8 @@ export class BatchDrawContext implements UIDrawContext {
     if (count) batch.stats.glyphs += n
   }
 
-  pushClip(rect: Rect): void {
-    this.batch.pushClip(rect.x, rect.y, rect.width, rect.height)
+  pushClip(rect: Rect, radii?: Radii4): void {
+    this.batch.pushClip(rect.x, rect.y, rect.width, rect.height, radii)
   }
 
   popClip(): void {

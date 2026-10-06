@@ -10,8 +10,8 @@ import {
   OneMinusSrcColorFactor,
   type Texture,
 } from 'three'
-import { MeshBasicNodeMaterial } from 'three/webgpu'
-import { Fn, If, workingToColorSpace, abs, attribute, clamp, dot, exp, float, floor, fwidth, int, ivec2, length, max, min, mix, pow, select, sign, sqrt, sRGBTransferEOTF, step, texture, uv, vec2, vec3, vec4 } from 'three/tsl'
+import { MeshBasicNodeMaterial, TextureNode } from 'three/webgpu'
+import { Fn, If, nodeObject, positionGeometry, workingToColorSpace, abs, attribute, clamp, dFdx, dFdy, dot, exp, float, floor, fwidth, int, ivec2, length, max, min, mix, pow, select, sign, sqrt, sRGBTransferEOTF, step, texture, uv, vec2, vec3, vec4 } from 'three/tsl'
 import type { BlendMode, Disposable } from '../types'
 import { BACKDROP_LARGE, BACKDROP_RAW, BACKDROP_SMALL, type BackdropBlur } from './BackdropBlur'
 import { TABLE_WIDTH, type BoxTable } from './BoxTable'
@@ -40,7 +40,7 @@ export const OFFSET_DATA = 20
 export const MODE_SPRITE = 0
 /** Solid fill: texture ignored, so it joins any texture segment without a draw-call switch. */
 export const MODE_SOLID = 1
-/** Box: per-corner radii, per-side border, solid + gradient background (reads a table entry). */
+/** Box: per-corner radii, per-side border, solid background (reads a table entry). */
 export const MODE_BOX = 2
 /** Analytic blurred rounded-rect shadow outside its casting box (reads a table entry). */
 export const MODE_SHADOW_OUTER = 3
@@ -52,12 +52,41 @@ export const MODE_GLYPH_EFFECT = 5
 export const MODE_GLYPH = 6
 /** Screen-space blurred backdrop clipped to a rounded rect (the quad's texture is the blurred framebuffer copy). */
 export const MODE_BACKDROP = 7
+/** Box with a gradient of at most {@link GRADIENT_SMALL_STOPS} stops (cheap loop). */
+export const MODE_BOX_GRADIENT_SMALL = 8
+/** Box with a gradient of up to `maxGradientStops` stops. */
+export const MODE_BOX_GRADIENT = 9
+/** Sprite / solid / glyph quads that carry a rounded-rect SDF (radius or border); plain ones never pay for it. */
+export const MODE_SPRITE_SHAPED = 10
+export const MODE_SOLID_SHAPED = 11
+export const MODE_GLYPH_SHAPED = 12
+/** Shadows without blur: two SDF coverages instead of the Gaussian integral. */
+export const MODE_SHADOW_OUTER_HARD = 13
+export const MODE_SHADOW_INSET_HARD = 14
+/**
+ * `aMode` packs the quad's texture slot with its mode: `mode + slot * MODE_RADIX` (modes stay below the radix), so multi-texture
+ * batching costs no vertex bandwidth.
+ */
+export const MODE_RADIX = 16
+/** Quads of a shader-clipped batch also carry their 1-based clip entry: `mode + slot * MODE_RADIX + clip * CLIP_RADIX` (slots < 8). */
+export const CLIP_RADIX = 128
 
 /** Texels per fixed-size table entry. Box entries add the gradient stops (see `SpriteBatch.fillBox`). */
 export const BOX_ENTRY_BASE = 6
 export const SHADOW_ENTRY = 6
 export const BACKDROP_ENTRY = 2
 export const MAX_GRADIENT_STOPS = 8
+/** Gradients with at most this many stops take the cheaper {@link MODE_BOX_GRADIENT_SMALL} path (2 mixes instead of 7). */
+export const GRADIENT_SMALL_STOPS = 3
+
+/** Texture slots a material can sample at most (one fragment fetch each; the others are never touched). */
+export const MAX_TEXTURE_SLOTS = 8
+
+/** Stop-count classes of the gradient shader: `[small, full]` (equal when `maxGradientStops` is already small). */
+export function gradientClasses(maxGradientStops: number): [number, number] {
+  const full = Math.max(2, Math.min(MAX_GRADIENT_STOPS, Math.floor(maxGradientStops)))
+  return [Math.min(GRADIENT_SMALL_STOPS, full), full]
+}
 
 export interface BatchMaterialOptions {
   /**
@@ -69,9 +98,15 @@ export interface BatchMaterialOptions {
   table: BoxTable
   /** Present when backdrop blur is enabled: its three sources are bound in every material. */
   backdrop?: BackdropBlur | undefined
+  /** Present when `pushClip` clips in the shader: per-clip entries (3 texels: rect, rounded-rect center/half, corner radii). */
+  clipTable?: BoxTable | undefined
+  /** Textures one draw call can sample (1 = classic one-texture-per-draw behaviour). */
+  maxTextures: number
+  /** Upper bound of the gradient shader's loop (2…{@link MAX_GRADIENT_STOPS}). */
+  maxGradientStops: number
+  /** One distinct texture per slot, bound to the slots a segment does not use. */
+  placeholders: Texture[]
 }
-
-const BLEND_MODES: readonly BlendMode[] = ['normal', 'additive', 'multiply', 'screen', 'premultiplied']
 
 // TSL's published typings are far narrower than what the node graph accepts at runtime; the shader below is
 // written against this loose alias on purpose.
@@ -79,6 +114,24 @@ const BLEND_MODES: readonly BlendMode[] = ['normal', 'additive', 'multiply', 'sc
 type N = any
 
 const srgbToLinear = sRGBTransferEOTF as unknown as (n: N) => N
+
+// TextureNode's published typings omit `setUpdateMatrix` / `setupUV`, so it is extended through a loose constructor type.
+const LooseTextureNode = TextureNode as unknown as new (value: Texture) => N
+
+/**
+ * Texel-fetch node for the box / clip tables: never transformed by `texture.matrix` and never y-flipped (they are ordinary data
+ * textures). A plain `texture(table).load(i)` would add a mat3 uniform, a flip uniform and a `textureSize()` to every single fetch.
+ * `clone()` keeps the subclass, so every `.load()` of it is plain too.
+ */
+class TableTextureNode extends LooseTextureNode {
+  setUpdateMatrix(): this {
+    ;(this as N).updateMatrix = false
+    return this
+  }
+  setupUV(_builder: unknown, uvNode: N): N {
+    return uvNode
+  }
+}
 
 /** OKLab (L, a, b) → linear sRGB. */
 function oklabToLinear(c: N): N {
@@ -146,10 +199,31 @@ function blurredRoundedBox(p: N, half: N, corner: N, sigma: N): N {
  * (working → output colour space) only for materials *without* a `fragmentNode`, so ours would come out linear and far too
  * dark. Apply it here — only when that handler is present (`builder.context.getOutput`); `WebGPURenderer` (both of its
  * backends) converts on its own. Tone mapping is deliberately not applied: UI colours must reach the screen as authored.
+ *
+ * The material samples up to `maxTextures` texture *slots*; which texture sits in a slot is a per-draw value
+ * ({@link setTextures}), never part of the shader — so the shader (and its GPU program) does not depend on the textures.
  */
 export class BatchNodeMaterial extends MeshBasicNodeMaterial {
   /** Set false for materials that render into render targets (their values are not encoded). */
   encodeOutput = true
+  /**
+   * Materials with equal keys compile to the same shader text. A classic `WebGLRenderer` then links ONE GL program for all of
+   * them (its program cache is keyed by this); node ids would otherwise make every material instance a program of its own.
+   * Left null for `WebGPURenderer`, whose pipeline cache would also share the *bindings* of the first material.
+   */
+  sharedProgramKey: string | null = null
+  /** Base texture nodes of the slots (their `value` is the texture sampled by that slot). */
+  slots: { value: unknown }[] = []
+
+  /** Bind `textures[k]` to slot `k`; unused slots get `placeholders[k]`. */
+  setTextures(textures: readonly Texture[], placeholders: readonly Texture[]): void {
+    const slots = this.slots
+    for (let k = 0; k < slots.length; k++) slots[k]!.value = textures[k] ?? placeholders[k]
+  }
+
+  override customProgramCacheKey(): string {
+    return this.sharedProgramKey ?? super.customProgramCacheKey()
+  }
 
   override setupOutput(builder: Parameters<MeshBasicNodeMaterial['setupOutput']>[0], outputNode: Parameters<MeshBasicNodeMaterial['setupOutput']>[1]): ReturnType<MeshBasicNodeMaterial['setupOutput']> {
     const node = super.setupOutput(builder, outputNode)
@@ -159,8 +233,10 @@ export class BatchNodeMaterial extends MeshBasicNodeMaterial {
   }
 }
 
-function createMaterial(map: Texture, blend: BlendMode, options: BatchMaterialOptions): MeshBasicNodeMaterial {
+function createMaterial(blend: BlendMode, options: BatchMaterialOptions, sharedProgram: boolean): BatchNodeMaterial {
   const material = new BatchNodeMaterial()
+  const slotCount = Math.max(1, Math.min(MAX_TEXTURE_SLOTS, Math.floor(options.maxTextures)))
+  const [gradSmall, gradFull] = gradientClasses(options.maxGradientStops)
 
   const vColor = attribute('aColor', 'vec4')
   const vLocal = attribute('aLocal', 'vec2')
@@ -172,58 +248,106 @@ function createMaterial(map: Texture, blend: BlendMode, options: BatchMaterialOp
   const toLinear = (c: N): N => (options.srgbVertexColors ? vec4(srgbToLinear(c.rgb), c.a) : c)
   const rgbToLinear = (c: N): N => (options.srgbVertexColors ? srgbToLinearInline(c) : c)
 
-  const tableNode = texture(options.table.texture)
+  const tableNode = nodeObject(new TableTextureNode(options.table.texture)) as unknown as N
   options.table.subscribe(tableNode as unknown as { value: unknown })
   /** Texel `base + k` of the box table (entries are addressed linearly and may wrap rows). */
-  const fetch = (base: N, k: number): N => {
+  const fetch = (base: N, k: number | N): N => {
     const idx = base.add(k)
     const y = floor(idx.div(TABLE_WIDTH))
     const x = idx.sub(y.mul(TABLE_WIDTH))
     return (tableNode as N).load(ivec2(int(x), int(y)))
   }
 
-  material.fragmentNode = Fn(() => {
-    const mode = vMode.add(0.5).floor()
-    const sampled = texture(map, uv())
-    const tint = toLinear(vColor)
-    // Anti-aliasing width of the local coordinate system (≈ one screen pixel). Derivatives must be taken in uniform
-    // control flow, so every derivative the branches need is computed up here.
-    const px = max(max(fwidth(vLocal.x), fwidth(vLocal.y)), 1e-4)
+  // Every slot starts on its own placeholder: Three de-duplicates texture uniforms by texture *identity* when a shader is built, so
+  // two slots holding the same texture at that moment would share one uniform for good and later differ in value only on paper.
+  const clipTableNode: N = options.clipTable ? nodeObject(new TableTextureNode(options.clipTable.texture)) : null
+  if (clipTableNode) options.clipTable!.subscribe(clipTableNode as unknown as { value: unknown })
+  const clipFetch = (base: N, k: number): N => {
+    const idx = base.add(k)
+    const y = floor(idx.div(TABLE_WIDTH))
+    const x = idx.sub(y.mul(TABLE_WIDTH))
+    return clipTableNode.load(ivec2(int(x), int(y)))
+  }
 
-    // ── sprite family (modes 0, 1, 5, 6): no table access ──────────────────────────────────────────────
-    const spriteTex = sampled.mul(tint)
-    const glyph = vec4(tint.rgb, sampled.a.mul(tint.a))
+  const slotNodes: N[] = []
+  for (let k = 0; k < slotCount; k++) slotNodes.push(texture(options.placeholders[k]!))
+  material.slots = slotNodes as { value: unknown }[]
+
+  // Every value more than one branch needs is declared (`toVar`) at the top level: a node first touched inside a branch is hoisted
+  // lazily into that branch and would be out of scope in the next. Derivatives are taken here too (uniform control flow).
+  material.fragmentNode = Fn(() => {
+    const packed = vMode.add(0.5).floor().toVar()
+    const clipIdx = options.clipTable ? floor(packed.div(CLIP_RADIX)).toVar() : float(0)
+    const packedMode = options.clipTable ? packed.sub(clipIdx.mul(CLIP_RADIX)).toVar() : packed
+    const slot = floor(packedMode.div(MODE_RADIX)).toVar()
+    const mode = packedMode.sub(slot.mul(MODE_RADIX)).toVar()
+    const tint = toLinear(vColor).toVar()
+    const uvA = uv().toVar()
+    const uvDx = dFdx(uvA).toVar()
+    const uvDy = dFdy(uvA).toVar()
+    // Anti-aliasing width of the local coordinate system (≈ one screen pixel).
+    const px = max(max(fwidth(vLocal.x), fwidth(vLocal.y)), 1e-4).toVar()
+    const base = vData.add(0.5).floor().toVar()
+    const p = vLocal
+    // world position + its per-pixel width, for the shader clip (derivatives at the top level)
+    const wp = positionGeometry.xy
+    const pxw = options.clipTable ? max(max(fwidth(wp.x), fwidth(wp.y)), 1e-4).toVar() : float(1)
+
+    // ── texture sampling: one fetch, only for quads that read their texture ──────────────────────────────────────────
+    // A flat if / else-if over the slot index (real branches, one fetch). Explicit gradients keep the sample legal inside
+    // non-uniform control flow (WGSL forbids implicit derivatives there); they are taken above, once, for all slots.
+    const sampled = vec4(1, 1, 1, 1).toVar()
+    const textured = mode
+      .equal(MODE_SPRITE)
+      .or(mode.equal(MODE_SPRITE_SHAPED))
+      .or(mode.equal(MODE_GLYPH))
+      .or(mode.equal(MODE_GLYPH_SHAPED))
+      .or(mode.equal(MODE_GLYPH_EFFECT))
+      .toVar()
+    const sampleSlot = (k: number) => (): void => {
+      // `sample()` clones the slot node (which follows the base node's value); the clone must not apply `texture.matrix` to the uv
+      sampled.assign((slotNodes[k] as N).sample(uvA).setUpdateMatrix(false).grad(uvDx, uvDy))
+    }
+    if (slotCount === 1) {
+      If(textured, sampleSlot(0))
+    } else {
+      let sampling: N = If(textured.and(slot.lessThan(0.5)), sampleSlot(0))
+      for (let k = 1; k < slotCount; k++) sampling = sampling.ElseIf(k === slotCount - 1 ? textured : textured.and(slot.lessThan(k + 0.5)), sampleSlot(k))
+      void sampling
+    }
+
+    // ── sprite family: no table access ──────────────────────────────────────────────────────────────────────────────
+    const spriteOut = sampled.mul(tint)
+    const glyphOut = vec4(tint.rgb, sampled.a.mul(tint.a))
     const dist = sampled.r
-    const soft = max(max(vShape.y, fwidth(dist)), 1e-4)
+    const soft = max(max(vShape.y, fwidth(dist)), 1e-4).toVar()
     const covOuter = clamp(dist.sub(vShape.x).div(soft).add(0.5), 0, 1)
     const covInner = clamp(dist.sub(vShape.z).div(soft).add(0.5), 0, 1)
-    const effect = vec4(tint.rgb, tint.a.mul(covOuter).mul(float(1).sub(covInner)))
-    const sprite = select(mode.equal(MODE_SPRITE), spriteTex, select(mode.equal(MODE_SOLID), tint, select(mode.equal(MODE_GLYPH_EFFECT), effect, glyph)))
+    const effectOut = vec4(tint.rgb, tint.a.mul(covOuter).mul(float(1).sub(covInner)))
 
-    // legacy rounded sprite / rect (images with a radius, solid rects with a radius or border)
-    const half = vShape.xy
-    const radius = vShape.z
-    const bw = vShape.w
-    const border = toLinear(vBorder)
-    const q = abs(vLocal).sub(half.sub(radius))
-    const d = length(max(q, 0)).add(min(max(q.x, q.y), 0)).sub(radius)
-    const outer = clamp(d.negate().div(px).add(0.5), 0, 1)
-    const inner = select(bw.greaterThan(0), clamp(d.add(bw).negate().div(px).add(0.5), 0, 1), float(1))
-    const shaped = vec4(mix(border.rgb, sprite.rgb, inner), mix(border.a, sprite.a, inner).mul(outer))
-    const useShape = half.x.greaterThan(0).and(mode.lessThan(1.5).or(mode.equal(MODE_GLYPH)))
-    // Declare and assign `out` at the top level before any conditional: a variable first touched inside a branch is
-    // hoisted lazily, which crashes Three's GLSL builder while it infers the branch type.
+    /** Rounded sprite / rect (images with a radius, solid rects with a radius or border): `color` clipped by the SDF. */
+    const shaped = (color: N): N => {
+      const half = vShape.xy
+      const radius = vShape.z
+      const bw = vShape.w
+      const border = toLinear(vBorder)
+      const q = abs(vLocal).sub(half.sub(radius))
+      const d = length(max(q, 0)).add(min(max(q.x, q.y), 0)).sub(radius)
+      const outer = clamp(d.negate().div(px).add(0.5), 0, 1)
+      const inner: N = select(bw.greaterThan(0), clamp(d.add(bw).negate().div(px).add(0.5), 0, 1), float(1))
+      const rgb: N = mix(border.rgb, color.rgb, inner)
+      const a: N = mix(border.a, color.a, inner).mul(outer)
+      return vec4(rgb, a)
+    }
+
     const out = vec4(0, 0, 0, 0).toVar()
-    out.assign(select(useShape, shaped, sprite))
 
-    // ── table family (modes 2, 3, 4, 7) ─────────────────────────────────────────────────────────────────
+    // ── table family ────────────────────────────────────────────────────────────────────────────────────────────────
     // One flat If / ElseIf chain: Three's GLSL node builder cannot build nested conditionals, and `.toVar()` inside a
     // branch trips it too, so branches are pure expressions that only `assign` the shared `out`.
-    const base = vData.add(0.5).floor()
-    const p = vLocal
 
-    /** Box body; `gradient` selects the variant (the branch cannot be nested inside the box branch). */
-    const boxBody = (gradient: boolean): void => {
+    /** Box body; `stops` > 0 adds a gradient whose loop is unrolled for at most that many stops. */
+    const boxBody = (stops: number): void => {
       const t0 = fetch(base, 0)
       const rad = fetch(base, 1)
       const bws = fetch(base, 2) // top, right, bottom, left
@@ -251,7 +375,7 @@ function createMaterial(map: Texture, blend: BlendMode, options: BatchMaterialOp
       // background colour, then the gradient over it (premultiplied, sRGB-encoded like CSS compositing)
       let premulRgb: N = bg.rgb.mul(bg.a)
       let premulA: N = bg.a
-      if (gradient) {
+      if (stops > 0) {
         const gp = fetch(base, 5)
         const kind = t0.z
         const radial = kind.equal(2).or(kind.equal(4))
@@ -264,7 +388,7 @@ function createMaterial(map: Texture, blend: BlendMode, options: BatchMaterialOp
         const colBase = base.add(BOX_ENTRY_BASE)
         let col: N = fetch(colBase, 0)
         let prev: N = stopPos(0)
-        for (let i = 1; i < MAX_GRADIENT_STOPS; i++) {
+        for (let i = 1; i < stops; i++) {
           const pos = stopPos(i)
           const active = step(float(i).add(0.5), n)
           const f = clamp(t.sub(prev).div(max(pos.sub(prev), 1e-5)), 0, 1).mul(active)
@@ -287,7 +411,8 @@ function createMaterial(map: Texture, blend: BlendMode, options: BatchMaterialOp
       out.assign(vec4(rgbToLinear(rgbP.div(max(a, 1e-5))), a.mul(vColor.a)))
     }
 
-    const shadowBody = (): void => {
+    /** Shadow body; `hard` skips the Gaussian (blur 0): the shadow shape is just an SDF coverage. */
+    const shadowBody = (hard: boolean) => (): void => {
       const t0 = fetch(base, 0) // mask box: half.xy, center.zw
       const t1 = fetch(base, 1) // mask box radii
       const t2 = fetch(base, 2) // shadow shape: half.xy, sigma.z
@@ -298,8 +423,9 @@ function createMaterial(map: Texture, blend: BlendMode, options: BatchMaterialOp
       const cMask = clamp(roundedBoxSdf(pm, t0.xy, cornerRadius(pm, t1)).negate().div(px).add(0.5), 0, 1)
       const ps = p.sub(t5.xy)
       const corner = min(cornerRadius(ps, t3), min(t2.x, t2.y))
-      const s = blurredRoundedBox(ps, t2.xy, corner, max(t2.z, 0.4))
-      const alpha = select(mode.equal(MODE_SHADOW_OUTER), s.mul(float(1).sub(cMask)), float(1).sub(s).mul(cMask))
+      const s = hard ? clamp(roundedBoxSdf(ps, t2.xy, corner).negate().div(px).add(0.5), 0, 1) : blurredRoundedBox(ps, t2.xy, corner, max(t2.z, 0.4))
+      const outerMode = hard ? MODE_SHADOW_OUTER_HARD : MODE_SHADOW_OUTER
+      const alpha = select(mode.equal(outerMode), s.mul(float(1).sub(cMask)), float(1).sub(s).mul(cMask))
       out.assign(vec4(rgbToLinear(color.rgb), alpha.mul(color.a).mul(vColor.a)))
     }
 
@@ -318,7 +444,7 @@ function createMaterial(map: Texture, blend: BlendMode, options: BatchMaterialOp
       const t0 = fetch(base, 0)
       const rad = fetch(base, 1)
       const c = clamp(roundedBoxSdf(p, t0.xy, cornerRadius(p, rad)).negate().div(px).add(0.5), 0, 1)
-      const src = (backdropNodes[level] as N).sample(uv()).level(0)
+      const src = (backdropNodes[level] as N).sample(uv()).setUpdateMatrix(false).level(0)
       const lum = dot(src.rgb, vec3(0.2126, 0.7152, 0.0722))
       const adjusted = mix(vec3(lum, lum, lum), src.rgb, t0.w).mul(t0.z)
       // the blurred levels hold sRGB-encoded values; the raw copy is linear on WebGPU (Three's internal frame buffer)
@@ -326,11 +452,36 @@ function createMaterial(map: Texture, blend: BlendMode, options: BatchMaterialOp
       out.assign(vec4(level === BACKDROP_RAW && options.backdrop!.captureIsLinear ? rgb : rgbToLinear(rgb), c.mul(vColor.a)))
     }
 
-    // the gradient kind lives in table texel 0 (`.z`); fetching it for every box fragment is one cheap load
-    const boxKind = fetch(base, 0).z
-    let chain: N = If(mode.equal(MODE_BOX).and(boxKind.lessThan(0.5)), () => boxBody(false))
-      .ElseIf(mode.equal(MODE_BOX), () => boxBody(true))
-      .ElseIf(mode.equal(MODE_SHADOW_OUTER).or(mode.equal(MODE_SHADOW_INSET)), shadowBody)
+    // Most frequent modes first (conditions are evaluated in order); plain sprites and glyphs cost one texture fetch and no
+    // table access, boxes fetch only their own entry.
+    let chain: N = If(mode.equal(MODE_SPRITE), () => {
+      out.assign(spriteOut)
+    })
+      .ElseIf(mode.equal(MODE_GLYPH), () => {
+        out.assign(glyphOut)
+      })
+      .ElseIf(mode.equal(MODE_BOX), () => boxBody(0))
+      .ElseIf(mode.equal(MODE_BOX_GRADIENT_SMALL), () => boxBody(gradSmall))
+    if (gradFull > gradSmall) chain = chain.ElseIf(mode.equal(MODE_BOX_GRADIENT), () => boxBody(gradFull))
+    else chain = chain.ElseIf(mode.equal(MODE_BOX_GRADIENT), () => boxBody(gradSmall))
+    chain = chain
+      .ElseIf(mode.equal(MODE_SOLID), () => {
+        out.assign(tint)
+      })
+      .ElseIf(mode.equal(MODE_SHADOW_OUTER).or(mode.equal(MODE_SHADOW_INSET)), shadowBody(false))
+      .ElseIf(mode.equal(MODE_SHADOW_OUTER_HARD).or(mode.equal(MODE_SHADOW_INSET_HARD)), shadowBody(true))
+      .ElseIf(mode.equal(MODE_GLYPH_EFFECT), () => {
+        out.assign(effectOut)
+      })
+      .ElseIf(mode.equal(MODE_SPRITE_SHAPED), () => {
+        out.assign(shaped(spriteOut))
+      })
+      .ElseIf(mode.equal(MODE_SOLID_SHAPED), () => {
+        out.assign(shaped(tint))
+      })
+      .ElseIf(mode.equal(MODE_GLYPH_SHAPED), () => {
+        out.assign(shaped(glyphOut))
+      })
     if (options.backdrop) {
       chain = chain
         .ElseIf(mode.equal(MODE_BACKDROP).and(vShape.x.lessThan(0.5)), backdropBody(BACKDROP_RAW))
@@ -339,12 +490,33 @@ function createMaterial(map: Texture, blend: BlendMode, options: BatchMaterialOp
     }
     void chain
 
+    if (options.clipTable) {
+      // Shader clip: coverage of the clip rectangle (and of its rounded rect) multiplies the quad's alpha. Only quads that straddle
+      // a clip edge or corner carry an entry; everything else skips this branch.
+      If(clipIdx.greaterThan(0.5), () => {
+        const cb = clipIdx.sub(1).mul(3)
+        const r0 = clipFetch(cb, 0)
+        const r1 = clipFetch(cb, 1)
+        const r2 = clipFetch(cb, 2)
+        const covX = clamp(min(wp.x.sub(r0.x), r0.z.sub(wp.x)).div(pxw).add(0.5), 0, 1)
+        const covY = clamp(min(wp.y.sub(r0.y), r0.w.sub(wp.y)).div(pxw).add(0.5), 0, 1)
+        const pc = wp.sub(r1.xy)
+        const covR = clamp(roundedBoxSdf(pc, r1.zw, cornerRadius(pc, r2)).negate().div(pxw).add(0.5), 0, 1)
+        const mask = covX.mul(covY).mul(covR)
+        out.assign(blend === 'premultiplied' ? out.mul(mask) : vec4(out.rgb, out.a.mul(mask)))
+      })
+    }
+
     // Multiply / screen blend through the constant blend factors below, so the shader pre-weights rgb by alpha
     // (multiply: lerp toward white; screen: premultiply) to keep translucent pixels well-behaved.
     if (blend === 'multiply') return vec4(mix(vec3(1, 1, 1), out.rgb, out.a), out.a)
     if (blend === 'screen') return vec4(out.rgb.mul(out.a), out.a)
     return out
   })()
+
+  if (sharedProgram) {
+    material.sharedProgramKey = `three-2d:${blend}:${options.clipTable ? 'clip' : 'noclip'}:t${slotCount}:g${gradSmall}-${gradFull}:${options.srgbVertexColors ? 's' : 'l'}:${options.backdrop ? (options.backdrop.captureIsLinear ? 'bdL' : 'bdS') : 'nobd'}`
+  }
 
   material.transparent = true
   material.depthTest = false
@@ -385,32 +557,39 @@ function createMaterial(map: Texture, blend: BlendMode, options: BatchMaterialOp
   return material
 }
 
-/** Lazily creates and caches one TSL material per (texture, blend mode). */
+/**
+ * Lazily creates and caches batch materials. One material per (blend mode, draw-call index): each draw call of a frame owns its
+ * material, so its texture slots can be set per draw without disturbing another draw call (a classic `WebGLRenderer` also
+ * re-uploads material uniforms exactly when the material changes between draws).
+ */
 export class BatchMaterialCache implements Disposable {
-  private readonly cache = new Map<Texture, (MeshBasicNodeMaterial | undefined)[]>()
+  private readonly cache = new Map<BlendMode, BatchNodeMaterial[]>()
   private disposed = false
 
   constructor(private readonly options: BatchMaterialOptions) {}
 
-  get(map: Texture, blend: BlendMode): MeshBasicNodeMaterial {
-    let slots = this.cache.get(map)
-    if (!slots) this.cache.set(map, (slots = []))
-    const i = BLEND_MODES.indexOf(blend)
-    let m = slots[i]
-    if (!m) slots[i] = m = createMaterial(map, blend, this.options)
+  get(blend: BlendMode, index: number, sharedProgram: boolean): BatchNodeMaterial {
+    let list = this.cache.get(blend)
+    if (!list) this.cache.set(blend, (list = []))
+    let m = list[index]
+    if (!m) list[index] = m = createMaterial(blend, this.options, sharedProgram)
     return m
+  }
+
+  get placeholders(): Texture[] {
+    return this.options.placeholders
   }
 
   get size(): number {
     let n = 0
-    for (const slots of this.cache.values()) for (const m of slots) if (m) n++
+    for (const list of this.cache.values()) n += list.length
     return n
   }
 
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
-    for (const slots of this.cache.values()) for (const m of slots) m?.dispose()
+    for (const list of this.cache.values()) for (const m of list) m.dispose()
     this.cache.clear()
   }
 }

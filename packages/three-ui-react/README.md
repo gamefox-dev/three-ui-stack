@@ -32,7 +32,7 @@ root.render(
 // you own the frame loop: ui.update(dt); ui.render()
 ```
 
-Components: `View`, `Text`, `Image`, `AnimatedImage`, `NinePatch`, `ScrollView` · hooks: `useThreeUI()`.
+Components: `View`, `Text`, `Image`, `AnimatedImage`, `NinePatch` (`patch`, optional `patchScale` for art baked at 2×/3×), `ScrollView` · hooks: `useThreeUI()`.
 
 Every host element accepts `style`, `className` (resolved by an installed `ClassNameResolver`, e.g. [`@implicit-invocation/three-ui-tailwind`](../three-ui-tailwind); a dev warning appears if none is installed), `ref` (the underlying `UINode`), `focusable`, `disabled` and the pointer/wheel/key/focus handlers (`onClick`, `onPointerDown/Move/Up/Enter/Leave`, `…Capture`, `onWheel`, `onKeyDown`, `onFocus`, `onBlur`).
 

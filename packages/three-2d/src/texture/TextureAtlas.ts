@@ -1,5 +1,6 @@
 import type { Texture } from 'three'
 import type { Disposable } from '../types'
+import { NinePatch, type NinePatchOptions } from './NinePatch'
 import { TextureRegion } from './TextureRegion'
 
 export class AtlasRegion extends TextureRegion {
@@ -10,6 +11,10 @@ export class AtlasRegion extends TextureRegion {
   originalWidth = 0
   originalHeight = 0
   rotate = false
+  /** libGDX `split:` — nine-patch borders in source pixels, `[left, right, top, bottom]`; null for a plain region. */
+  splits: readonly [number, number, number, number] | null = null
+  /** libGDX `pad:` — content padding in source pixels, `[left, right, top, bottom]`. */
+  pads: readonly [number, number, number, number] | null = null
 }
 
 export interface AtlasRegionData {
@@ -23,6 +28,10 @@ export interface AtlasRegionData {
   offsetY?: number
   originalWidth?: number
   originalHeight?: number
+  /** Nine-patch borders `[left, right, top, bottom]` (atlas `split:`). */
+  splits?: readonly [number, number, number, number]
+  /** Content padding `[left, right, top, bottom]` (atlas `pad:`). */
+  pads?: readonly [number, number, number, number]
 }
 
 export interface AtlasPageData {
@@ -63,6 +72,8 @@ export class TextureAtlas implements Disposable {
         region.offsetY = r.offsetY ?? 0
         region.originalWidth = r.originalWidth ?? r.width
         region.originalHeight = r.originalHeight ?? r.height
+        region.splits = r.splits ?? null
+        region.pads = r.pads ?? null
         atlas.addRegion(region)
       }
     }
@@ -89,6 +100,18 @@ export class TextureAtlas implements Disposable {
     return index === undefined ? list[0] : list.find((r) => r.index === index)
   }
 
+  /**
+   * A nine-patch over the region `name`, using its atlas `split:` (and `pad:` as content padding). `scale` is the logical size of one
+   * source pixel (art baked at 2× → `0.5`). Throws when the region has no `split:`.
+   */
+  createPatch(name: string, scale = 1, options: Omit<NinePatchOptions, 'scale' | 'pad'> = {}, index?: number): NinePatch {
+    const region = this.findRegion(name, index)
+    if (!region) throw new Error(`[three-2d] atlas has no region "${name}"`)
+    if (!region.splits) throw new Error(`[three-2d] atlas region "${name}" has no split: (not a nine-patch)`)
+    const [l, r, t, b] = region.splits
+    return new NinePatch(region, l, r, t, b, { ...options, scale, ...(region.pads ? { pad: region.pads } : {}) })
+  }
+
   /** All regions sharing `name`, ordered by `index` (animation frames). */
   findRegions(name: string): AtlasRegion[] {
     return [...(this.byName.get(name) ?? [])]
@@ -99,6 +122,11 @@ export class TextureAtlas implements Disposable {
     this.disposed = true
     for (const t of this.textures) t.dispose()
   }
+}
+
+function quad(value: string): [number, number, number, number] {
+  const [a, b, c, d] = value.split(',').map((s) => parseFloat(s.trim()))
+  return [a ?? 0, b ?? 0, c ?? 0, d ?? 0]
 }
 
 function pair(value: string | undefined): [number, number] {
@@ -181,6 +209,12 @@ export function parseAtlasText(text: string): AtlasData {
       }
       case 'index':
         region.index = parseInt(value, 10)
+        break
+      case 'split':
+        region.splits = quad(value)
+        break
+      case 'pad':
+        region.pads = quad(value)
         break
       case 'rotate':
         if (value !== 'false' && value !== '0') {

@@ -511,6 +511,23 @@ function resolveTransitions(pick: (k: string) => unknown): readonly ResolvedTran
  * Cascade: component defaults < parent (inherited keys only) < theme < className < direct style.
  * `layers` is ordered lowest → highest priority and must already be `normalizeStyle`d.
  */
+/**
+ * A component default for one padding edge must not beat an author's `padding` / `paddingHorizontal` / `paddingVertical`: the
+ * defaults are the lowest layer, but edge keys are more specific than shorthands once they reach Yoga.
+ */
+function shorthandShadowsDefault(key: string, explicit: Record<string, unknown>): boolean {
+  switch (key) {
+    case 'paddingTop':
+    case 'paddingBottom':
+      return explicit.padding !== undefined || explicit.paddingVertical !== undefined
+    case 'paddingLeft':
+    case 'paddingRight':
+      return explicit.padding !== undefined || explicit.paddingHorizontal !== undefined
+    default:
+      return false
+  }
+}
+
 export function computeStyle(layers: readonly Style[], parent: ComputedStyle | null, componentDefaults: Style | undefined): ComputedStyle {
   const explicit: Record<string, unknown> = {}
   for (const layer of layers) {
@@ -528,7 +545,7 @@ export function computeStyle(layers: readonly Style[], parent: ComputedStyle | n
       out[key] = normalizeValue(key, e)
     } else if (INHERITED.has(key) && p) {
       out[key] = p[key]
-    } else if (defaults && defaults[key] !== undefined) {
+    } else if (defaults && defaults[key] !== undefined && !shorthandShadowsDefault(key, explicit)) {
       out[key] = normalizeValue(key, defaults[key])
     }
   }

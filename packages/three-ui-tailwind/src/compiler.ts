@@ -4,7 +4,8 @@ import { compile } from '@tailwindcss/node'
 import { convertDeclarations } from './css/convert'
 import { parseCss, unescapeCssIdent, type AtRuleNode, type CssNode, type Decl } from './css/parse'
 import { parseCssColor, parseQuantity, resolveVars, rgbaToHex } from './css/values'
-import { REGISTRY_FORMAT, REGISTRY_VERSION, type Condition, type RegistryRule, type TailwindRegistry } from './registry'
+import { parseEasing } from './css/animation'
+import { REGISTRY_FORMAT, REGISTRY_VERSION, type Condition, type RegistryKeyframe, type RegistryRule, type TailwindRegistry } from './registry'
 
 export interface CompileTailwindOptions {
   /** Tailwind entry stylesheet source (`@import "tailwindcss"; @theme {…}`). */
@@ -111,6 +112,7 @@ export function cssToRegistry(css: string): { registry: TailwindRegistry; warnin
   collectGlobals(ast, null, globals)
 
   const rules: RegistryRule[] = []
+  const keyframes: Record<string, RegistryKeyframe[]> = {}
   let order = 0
   const seenWarnings = new Set<string>()
   const warn = (m: string) => {
@@ -136,6 +138,9 @@ export function cssToRegistry(css: string): { registry: TailwindRegistry; warnin
           else visit(node.nodes ?? [], { ...ctx, conds: [...ctx.conds, ...cond] })
         } else if (node.name === 'supports' || node.name === 'container') {
           visit(node.nodes ?? [], ctx) // assume modern feature support
+        } else if (node.name === 'keyframes' && node.nodes) {
+          const frames = convertKeyframes(node.params.trim(), node.nodes, globals, warn)
+          if (frames.length) keyframes[node.params.trim()] = frames
         }
       } else if (node.type === 'rule') {
         if (ctx.layer === null && isThemeRoot(node.selector)) continue
@@ -173,7 +178,34 @@ export function cssToRegistry(css: string): { registry: TailwindRegistry; warnin
     if (resolved === null) continue
     vars[name] = normalizeVar(resolved)
   }
-  return { registry: { format: REGISTRY_FORMAT, version: REGISTRY_VERSION, vars, rules }, warnings }
+  return { registry: { format: REGISTRY_FORMAT, version: REGISTRY_VERSION, vars, rules, ...(Object.keys(keyframes).length ? { keyframes } : {}) }, warnings }
+}
+
+/** `@keyframes name { from {…} 50%, 75% {…} to {…} }` → sorted steps (a step listing several offsets is repeated). */
+function convertKeyframes(name: string, nodes: CssNode[], globals: Map<string, string>, warn: (m: string) => void): RegistryKeyframe[] {
+  const frames: RegistryKeyframe[] = []
+  for (const node of nodes) {
+    if (node.type !== 'rule') continue
+    const offsets = node.selector
+      .split(',')
+      .map((sel) => sel.trim().toLowerCase())
+      .map((sel) => (sel === 'from' ? 0 : sel === 'to' ? 1 : /^[\d.]+%$/.test(sel) ? parseFloat(sel) / 100 : NaN))
+    if (offsets.some((o) => Number.isNaN(o))) {
+      warn(`@keyframes ${name}: unsupported selector "${node.selector}" (ignored)`)
+      continue
+    }
+    const decls = node.nodes.filter((n): n is Decl => n.type === 'decl')
+    const easingDecl = decls.find((d) => d.prop === 'animation-timing-function')
+    const easing = easingDecl ? parseEasing(resolveVars(easingDecl.value, new Map(), globals) ?? easingDecl.value) : null
+    const converted = convertDeclarations(
+      decls.filter((d) => d.prop !== 'animation-timing-function'),
+      globals,
+      `@keyframes ${name}`,
+    )
+    for (const w of converted.warnings) warn(w)
+    for (const offset of offsets) frames.push({ offset, ...(easing ? { easing } : {}), style: converted.style })
+  }
+  return frames.sort((a, b) => a.offset - b.offset)
 }
 
 function isThemeRoot(selector: string): boolean {
@@ -236,6 +268,8 @@ function parseUtilitySelector(selector: string): ParsedSelector {
 function parseMedia(params: string): Condition[] | 'always' | null {
   const p = params.trim().toLowerCase()
   if (p === '(hover: hover)' || p === '(hover:hover)' || p === 'screen') return 'always'
+  if (p === '(prefers-reduced-motion: reduce)' || p === '(prefers-reduced-motion:reduce)') return [{ reducedMotion: true }]
+  if (p === '(prefers-reduced-motion: no-preference)' || p === '(prefers-reduced-motion:no-preference)') return [{ reducedMotion: false }]
   let m = /^\(prefers-color-scheme:\s*(dark|light)\)$/.exec(p)
   if (m) return [{ scheme: m[1] as 'dark' | 'light' }]
   m = /^\(width\s*>=\s*([\d.]+)(px|rem|em)\)$/.exec(p) ?? /^\(min-width:\s*([\d.]+)(px|rem|em)\)$/.exec(p)

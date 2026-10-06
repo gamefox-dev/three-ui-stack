@@ -145,7 +145,7 @@ describe('SpriteBatch', () => {
     batch.begin(createOrthographicCamera(800, 600))
     batch.draw(tex, 0, 0, 10, 10)
     batch.pushClip(100, 50, 200, 100)
-    batch.draw(tex, 120, 60, 10, 10)
+    batch.draw(tex, 280, 60, 40, 10) // sticks out of the clip on the right: the scissor does real work
     batch.popClip()
     batch.end()
     expect(renderer.calls[0]!.scissor).toBeNull()
@@ -154,6 +154,24 @@ describe('SpriteBatch', () => {
     // scissor state is restored
     expect(renderer.getScissorTest()).toBe(false)
     expect(renderer.autoClear).toBe(true)
+    batch.dispose()
+  })
+
+  it('a clip that contains everything painted under it is elided, so neighbouring segments share one render pass', () => {
+    const renderer = new MockRenderer()
+    const batch = new SpriteBatch({ renderer })
+    const tex = makeTexture()
+    batch.begin(createOrthographicCamera(800, 600))
+    batch.draw(tex, 0, 0, 10, 10)
+    batch.pushClip(100, 50, 200, 100)
+    batch.draw(tex, 120, 60, 10, 10) // fully inside: clipping is a no-op
+    batch.popClip()
+    batch.draw(tex, 400, 400, 10, 10)
+    batch.end()
+    expect(renderer.calls).toHaveLength(1)
+    expect(renderer.calls[0]!.scissor).toBeNull()
+    expect(batch.stats.renderPasses).toBe(1)
+    expect(batch.stats.drawCalls).toBe(3) // segments are unchanged; only the render() submissions merge
     batch.dispose()
   })
 

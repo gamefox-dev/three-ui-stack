@@ -27,3 +27,22 @@ for (const f of fonts) {
     console.log(`${f.name}-${size}: ${r.baked.atlas.width}×${r.baked.atlas.height}, ${r.baked.json.glyphs.length} glyphs`)
   }
 }
+
+// Display face with a distance channel (text outlines / shadows). Same Inter Bold outlines, registered as weight 800 of
+// the family "Inter Display" so `font-extrabold` + a display font family picks it. maxWidth is in px at each baked size.
+for (const { size, stroke } of [
+  { size: 32, stroke: 8 },
+  { size: 64, stroke: 16 },
+]) {
+  const out = resolve(root, 'test/fixtures/public/fonts', `game-display-${size}`)
+  const r = await packFontFile(resolve(root, 'test/fixtures/fonts', 'Inter_700Bold.ttf'), out, {
+    size,
+    characters: 'latin',
+    family: 'Inter Display',
+    weight: 800,
+    style: 'normal',
+    supersample: 4,
+    stroke: { maxWidth: stroke },
+  })
+  console.log(`game-display-${size}: ${r.baked.atlas.width}×${r.baked.atlas.height}, ${r.baked.json.glyphs.length} glyphs, stroke ≤ ${stroke}px`)
+}

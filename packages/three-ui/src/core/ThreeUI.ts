@@ -1,15 +1,16 @@
-import { PolygonSpriteBatch, createOrthographicCamera, updateOrthographicCamera, Color4, parseColor, type BatchRenderer, type ColorLike, type Disposable } from '@implicit-invocation/three-2d'
+import { PolygonSpriteBatch, createOrthographicCamera, updateOrthographicCamera, Color4, parseColor, type BackdropQuality, type BatchRenderer, type ColorLike, type Disposable } from '@implicit-invocation/three-2d'
 import { Color, SRGBColorSpace, Scene, type OrthographicCamera } from 'three'
+import { AnimationEngine } from '../anim/engine'
 import { createEnvironment, type UIEnvironment } from '../env'
 import { InputManager } from '../input/InputManager'
 import { BatchDrawContext, type PaintCounters } from '../paint/BatchDrawContext'
 import { paintTree, type PaintTreeStats } from '../paint/paintTree'
 import { getDefaultClassNameResolver, type ClassNameResolver } from '../resolver'
-import type { Style } from '../style/types'
+import type { Keyframes, Style } from '../style/types'
 import { FontRegistry } from '../text/FontRegistry'
 import { TextLayoutCache } from '../text/TextLayoutCache'
 import { YGEnums as E, getYogaConfig } from '../yoga/runtime'
-import { DEP_COLOR_SCHEME, DEP_THEME, DEP_VIEWPORT, STYLE_DIRTY, SUBTREE_STYLE_DIRTY } from './flags'
+import { DEP_COLOR_SCHEME, DEP_MOTION, DEP_THEME, DEP_VIEWPORT, STYLE_DIRTY, SUBTREE_STYLE_DIRTY } from './flags'
 import type { NodeKind, UINode } from './UINode'
 import { View } from './View'
 
@@ -36,6 +37,12 @@ export interface ThreeUIOptions {
   maxSprites?: number
   /** Called when something invalidated the UI (use it to schedule a frame on demand). */
   onInvalidate?: () => void
+  /**
+   * `backdrop-filter: blur()` quality: `'full'` (default; small + large blur), `'low'` (one small blur) or `'off'`
+   * (elements fall back to their own translucent background). Costs nothing in frames where no node uses a backdrop
+   * filter. Needs a renderer with `copyFramebufferToTexture` (Three's `WebGPURenderer`); fixed at construction.
+   */
+  backdropBlur?: BackdropQuality
 }
 
 /** Debug counters (spec §19.5). Style/layout counters are cumulative; paint counters describe the last frame. */
@@ -51,6 +58,11 @@ export interface UIStats {
   sprites: number
   glyphs: number
   clipChanges: number
+  /** Last frame: SDF boxes and shadow layers painted, backdrop framebuffer copies (≤ 1) and blur passes. */
+  boxes: number
+  shadows: number
+  backdropCopies: number
+  backdropPasses: number
   nodesPainted: number
   nodesCulled: number
 }
@@ -67,6 +79,9 @@ export class ThreeUI implements Disposable {
   readonly fonts: FontRegistry
   readonly textLayouts = new TextLayoutCache()
   readonly input: InputManager
+  /** CSS-like animations, transitions and `node.animate()` handles, advanced by `update(dt)`. */
+  readonly engine: AnimationEngine
+  private readonly keyframesByName = new Map<string, Keyframes>()
   readonly stats: UIStats = {
     nodes: 0,
     layoutPasses: 0,
@@ -78,6 +93,10 @@ export class ThreeUI implements Disposable {
     sprites: 0,
     glyphs: 0,
     clipChanges: 0,
+    boxes: 0,
+    shadows: 0,
+    backdropCopies: 0,
+    backdropPasses: 0,
     nodesPainted: 0,
     nodesCulled: 0,
   }
@@ -117,10 +136,11 @@ export class ThreeUI implements Disposable {
     this.clearColor = options.clearColor !== undefined ? parseColor(options.clearColor, new Color4()) : null
     this.camera = createOrthographicCamera(options.width, options.height)
     this.batch = new PolygonSpriteBatch({
-      ...(options.renderer ? { renderer: options.renderer } : {}),
+      ...(options.renderer ? { renderer: options.renderer, backdrop: options.backdropBlur ?? 'full' } : {}),
       maxSprites: options.maxSprites ?? (options.renderer ? 8192 : 16383),
     })
     this.ctx = new BatchDrawContext(this.batch, this.counters)
+    this.engine = new AnimationEngine(this)
     this.viewRoot = new View({ name: 'viewRoot', style: { width: options.width, height: options.height } })
     this.viewRoot._attach(this)
     this.input = new InputManager(this)
@@ -141,6 +161,17 @@ export class ThreeUI implements Disposable {
   setTheme(theme: ThemeStyles | ((env: UIEnvironment) => ThemeStyles) | null): void {
     this.theme = theme
     this.invalidateAllStyles()
+  }
+
+  /** Register named keyframes for style `animation: { name }` (Tailwind `@keyframes` are looked up in the resolver). */
+  registerKeyframes(name: string, keyframes: Keyframes): this {
+    this.keyframesByName.set(name, keyframes)
+    return this
+  }
+
+  /** @internal */
+  lookupKeyframes(name: string): Keyframes | undefined {
+    return this.keyframesByName.get(name) ?? this.classNameResolver?.keyframes?.(name)
   }
 
   /** @internal */
@@ -186,6 +217,18 @@ export class ThreeUI implements Disposable {
     if (this.environment.colorScheme === scheme) return
     this.environment.colorScheme = scheme
     this.invalidateDeps(DEP_COLOR_SCHEME)
+  }
+
+  /**
+   * Environment switches that class variants and animations react to: `reducedMotion` drives `motion-reduce:` /
+   * `motion-safe:` (and makes the engine skip decorative animation when you ask it to), `colorScheme` drives `dark:`.
+   */
+  setMediaFlags(flags: { reducedMotion?: boolean; colorScheme?: UIEnvironment['colorScheme'] }): void {
+    if (flags.colorScheme !== undefined) this.setColorScheme(flags.colorScheme)
+    if (flags.reducedMotion !== undefined && this.environment.reducedMotion !== flags.reducedMotion) {
+      this.environment.reducedMotion = flags.reducedMotion
+      this.invalidateDeps(DEP_MOTION)
+    }
   }
 
   setThemeName(name: string): void {
@@ -241,7 +284,7 @@ export class ThreeUI implements Disposable {
 
   /** True when `update()`/`render()` would produce a different picture (or animations are running). */
   get needsRender(): boolean {
-    return this._paintDirty || this._updatePending || this.tickables.size > 0
+    return this._paintDirty || this._updatePending || this.tickables.size > 0 || this.engine.hasRunning
   }
 
   // ───────────────────────────── update: style → layout ─────────────────────────────
@@ -255,6 +298,8 @@ export class ThreeUI implements Disposable {
     if (dt > 0 && this.tickables.size > 0) {
       for (const t of [...this.tickables]) t._tick(dt)
     }
+    // with dt = 0 nothing advances (a paused / frozen game freezes every animation); cancel / finish / seek still apply
+    this.engine.tick(dt)
     this.updateStyles(this.viewRoot)
     this.runLayout()
     this._updatePending = false
@@ -332,6 +377,10 @@ export class ThreeUI implements Disposable {
     s.sprites = b.sprites
     s.glyphs = b.glyphs
     s.clipChanges = b.clipChanges
+    s.boxes = b.boxes
+    s.shadows = b.shadows
+    s.backdropCopies = b.backdropCopies
+    s.backdropPasses = b.backdropPasses
     s.nodesPainted = this.paintStats.nodesPainted
     s.nodesCulled = this.paintStats.nodesCulled
   }

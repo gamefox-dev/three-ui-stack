@@ -34,6 +34,11 @@ export interface BitmapFontJSON {
   ascent: number
   descent: number
   atlas: { width: number; height: number; image?: string; padding?: number }
+  /**
+   * Present when the atlas' red channel holds a signed distance field (glyph coverage stays in alpha):
+   * `maxWidth` is the widest `text-stroke` (px at `size`) the field can render. Optional, so version-1 files stay valid.
+   */
+  stroke?: { maxWidth: number }
   /** Unicode code point (as decimal string) → glyph ID. */
   chars: Record<string, number>
   glyphs: BitmapGlyphJSON[]
@@ -91,6 +96,10 @@ export class BitmapFontData {
   }
   get descent(): number {
     return this.json.descent
+  }
+  /** Widest text stroke (px at the baked size) the distance channel supports, or 0 when the font has no stroke channel. */
+  get strokeMaxWidth(): number {
+    return this.json.stroke?.maxWidth ?? 0
   }
 
   glyphForCodePoint(cp: number): Glyph | undefined {

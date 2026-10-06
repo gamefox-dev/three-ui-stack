@@ -19,7 +19,15 @@ three-2d-font pack ./Inter-Regular.ttf --size 32 --charset latin --output ./asse
 # → inter-32.png + inter-32.json   (format "three-2d-bitmap-font", version 1)
 ```
 
-Options: `--size`, `--charset latin|ascii|digits`, `--chars "<literal>"`, `--supersample`, `--padding`, `--family/--weight/--style`, `--max-atlas`.
+Options: `--size`, `--charset latin|ascii|digits`, `--chars "<literal>"`, `--supersample`, `--padding`, `--family/--weight/--style`, `--max-atlas`, `--stroke <px>`.
+
+### Text outlines and shadows (`--stroke`)
+
+```bash
+three-2d-font pack ./Inter-Bold.ttf --size 64 --stroke 16 --family "Inter Display" --weight 800 --output ./assets/display-64
+```
+
+Bakes a **second channel**: the red channel holds a signed distance field (0.5 at the glyph edge, ±`stroke/2 + 1` px to either side) while coverage stays in alpha — the JSON gains `"stroke": { "maxWidth": 16 }` and the glyph padding grows to fit it. `three-ui` then renders `-webkit-text-stroke` of **any width up to `maxWidth`** (scaled with the display size) and soft `text-shadow` from the same atlas; wider requests clamp with a one-time warning, and fonts without the channel simply have no stroke. The atlas must be loaded **without alpha premultiplication** (the field lives in transparent texels). API equivalent: `bakeBitmapFont(data, { size, stroke: { maxWidth } })`. The distance transform runs on the CPU from the rasterizer's coverage, so both rasterizers support it.
 
 ## Runtime packing
 

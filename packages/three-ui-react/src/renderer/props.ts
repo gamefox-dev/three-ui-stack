@@ -1,4 +1,4 @@
-import type { AnimatedImage, Image, NinePatchView, ScrollView, Text, UIEvent, UIFocusEvent, UIKeyEvent, UINode, UIPointerEvent, UIWheelEvent } from '@implicit-invocation/three-ui'
+import type { AnimatedImage, Image, NinePatchView, ScrollView, Text, UIAnimationEvent, UIEvent, UIFocusEvent, UIKeyEvent, UINode, UIPointerEvent, UITransitionEvent, UIWheelEvent } from '@implicit-invocation/three-ui'
 import type { Animation, NinePatch, TextureRegion } from '@implicit-invocation/three-2d'
 import type { Texture } from 'three'
 import type { Style } from '@implicit-invocation/three-ui'
@@ -30,6 +30,13 @@ export const EVENT_PROPS: Readonly<Record<string, { type: string; capture: boole
   onKeyUp: { type: 'keyup', capture: false, priority: 'discrete' },
   onFocus: { type: 'focus', capture: false, priority: 'discrete' },
   onBlur: { type: 'blur', capture: false, priority: 'discrete' },
+  onAnimationStart: { type: 'animationstart', capture: false, priority: 'continuous' },
+  onAnimationIteration: { type: 'animationiteration', capture: false, priority: 'continuous' },
+  onAnimationEnd: { type: 'animationend', capture: false, priority: 'discrete' },
+  onAnimationCancel: { type: 'animationcancel', capture: false, priority: 'discrete' },
+  onTransitionStart: { type: 'transitionstart', capture: false, priority: 'continuous' },
+  onTransitionEnd: { type: 'transitionend', capture: false, priority: 'discrete' },
+  onTransitionCancel: { type: 'transitioncancel', capture: false, priority: 'discrete' },
 }
 
 /** Props may be passed as `undefined` (conditional props under `exactOptionalPropertyTypes`). */
@@ -62,6 +69,14 @@ interface CommonPropsDef<T extends UINode = UINode> {
   onKeyUp?: (event: UIKeyEvent) => void
   onFocus?: (event: UIFocusEvent) => void
   onBlur?: (event: UIFocusEvent) => void
+  /** CSS animation lifecycle (`animate-*` classes, style `animation`, `node.animate()`); they bubble like DOM events. */
+  onAnimationStart?: (event: UIAnimationEvent) => void
+  onAnimationIteration?: (event: UIAnimationEvent) => void
+  onAnimationEnd?: (event: UIAnimationEvent) => void
+  onAnimationCancel?: (event: UIAnimationEvent) => void
+  onTransitionStart?: (event: UITransitionEvent) => void
+  onTransitionEnd?: (event: UITransitionEvent) => void
+  onTransitionCancel?: (event: UITransitionEvent) => void
 }
 
 export type CommonProps<T extends UINode = UINode> = Opt<CommonPropsDef<T>>

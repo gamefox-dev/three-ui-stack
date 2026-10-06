@@ -1,0 +1,35 @@
+# three-ui-game-ui
+
+A **game-style UI** on `@implicit-invocation/three-ui` + Tailwind v4 (no React), laid over a busy 3D scene rendered by the same Three renderer. It exercises the whole game-UI paint stack:
+
+| Feature | Where |
+| --- | --- |
+| Box shader: per-corner radii, borders, `bg-linear-*` / `bg-radial` gradients | every panel, chip and button |
+| Shadows: `shadow-*`, `ring-*`, `inset-shadow-*`, hard `shadow-[0_5px_0_#92400e]` | quest panel, buttons |
+| Outlined titles, text shadow, `line-clamp` ellipsis | `Slay the Dummy`, `VICTORY!` (font baked with `--stroke`) |
+| Hover / press transitions (`transition duration-150 hover:scale-105 active:translate-y-1`) | buttons and chips |
+| `@keyframes` from `@theme` (`animate-pop`, `animate-shine`, `animate-glow`) | modal, quest progress bar, `NEW` badge |
+| Animated progress bar (`transition-[width]`, explicit layout opt-in) | boss HP, quest progress |
+| Floating damage numbers (`node.animate`, `animationend`/`finished` → dispose) | click the boss card or press ATTACK! |
+| Backdrop blur (`backdrop-blur-md/lg/xl/sm`), one shared capture | HUD pills, boss card, modal scrim + dialog |
+| Images: `object-cover`, circle avatar + ring, `drop-shadow-lg` gems, `tint-color` | top bar, boss card |
+| `pointer-events-none` layers, `motion-reduce:`, `setMediaFlags` | damage layer, "Reduced motion" toggle |
+
+```bash
+bun run build:packages && bun --cwd examples/three-ui-game-ui dev    # http://localhost:5175
+```
+
+URL parameters: `?webgl` (force the WebGL2 backend), `?blur=off|low|full` (backdrop quality; also the in-app "Blur" button), `?modal` (open the modal), `?stress=N` (stress mode), `&anim=1` (animate a quarter of the stress panels with `node.animate`).
+
+## Stress mode
+
+`Stress` (or `?stress=2000`) replaces the HUD with N panels — each a gradient (OKLab), a 1 px ring, an inset highlight and a drop shadow, authored as plain style objects — laid out by Yoga and painted into the same batch. The HUD prints the numbers live (`window.__perf` has them too):
+
+```
+WebGPU · 60 fps · CPU 4.4 ms/frame
+draw calls 2 (1 passes) · quads 8213 · boxes 2010 · shadows 6020
+```
+
+`node measure.mjs` (needs `playwright-core`) sweeps both backends and prints a table; the numbers in the changeset were produced with it (Apple M-series, headless Chrome 1280×720, `--disable-frame-rate-limit --disable-gpu-vsync`).
+
+Notes: the HUD itself is 24 draw calls (4 `renderer.render()` submissions) because it alternates three bitmap-font atlases and four image textures — painter's order forbids sorting by texture; the stress screen has one font and no images, which is what shows the batching claim. Each `renderer.render()` submission costs ~1 ms of fixed Three overhead, which is why the batch merges segments into as few submissions as it can (scissor groups whose clip contains everything under it are elided; backdrop capture generations are the only forced splits).

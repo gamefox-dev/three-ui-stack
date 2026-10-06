@@ -24,11 +24,17 @@ export type ColorLike =
 
 export type BlendMode = 'normal' | 'additive' | 'multiply' | 'screen' | 'premultiplied'
 
-export type FlushReason = 'texture' | 'blend' | 'clip' | 'capacity' | 'explicit' | 'end'
+export type FlushReason = 'texture' | 'blend' | 'clip' | 'capacity' | 'explicit' | 'end' | 'backdrop'
 
 /** Optional development counters (spec §19.5). All values are cumulative until `reset()`. */
 export class RenderStats {
   sprites = 0
+  /** SDF boxes / shadow layers written this frame (each is one quad). */
+  boxes = 0
+  shadows = 0
+  /** Backdrop blur: framebuffer copies (≤ 1 per frame) and blur passes this frame. */
+  backdropCopies = 0
+  backdropPasses = 0
   /** Segment boundaries (a segment == one draw call). */
   flushes = 0
   drawCalls = 0
@@ -44,10 +50,15 @@ export class RenderStats {
     capacity: 0,
     explicit: 0,
     end: 0,
+    backdrop: 0,
   }
 
   reset(): void {
     this.sprites = 0
+    this.boxes = 0
+    this.shadows = 0
+    this.backdropCopies = 0
+    this.backdropPasses = 0
     this.flushes = 0
     this.drawCalls = 0
     this.renderPasses = 0
@@ -60,5 +71,6 @@ export class RenderStats {
     this.flushReasons.capacity = 0
     this.flushReasons.explicit = 0
     this.flushReasons.end = 0
+    this.flushReasons.backdrop = 0
   }
 }

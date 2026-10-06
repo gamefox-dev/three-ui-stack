@@ -2,7 +2,7 @@ import type { Texture } from 'three'
 import { TextureRegion, fullRegion } from '@implicit-invocation/three-2d'
 import type { UIDrawContext } from '../paint/DrawContext'
 import { YGEnums as E } from '../yoga/runtime'
-import { paintBox } from './paintBox'
+import { cornerRadii, paintBox } from './paintBox'
 import { UINode, type NodeKind, type UINodeOptions } from './UINode'
 
 export type ImageSource = TextureRegion | Texture
@@ -118,13 +118,27 @@ export class Image extends UINode {
     const iw = this.intrinsicWidth
     const ih = this.intrinsicHeight
     const tint = cs.tintColor
-    const radius = Math.max(0, cs.borderRadius - Math.max(bl, bt))
-    switch (this._resizeMode) {
-      case 'contain': {
-        const s = Math.min(cw / iw, ch / ih)
-        const dw = iw * s
-        const dh = ih * s
-        ctx.image(src, { x: cx + (cw - dw) / 2, y: cy + (ch - dh) / 2, width: dw, height: dh }, { tint, radius })
+    // images use one radius (the largest corner) — per-corner image radii would need a textured box shader
+    const r = cornerRadii(cs)
+    const radius = Math.max(0, Math.max(r[0], r[1], r[2], r[3]) - Math.max(bl, bt))
+
+    // `object-fit` wins over the `resizeMode` prop
+    const fit = cs.objectFit
+    const mode: ResizeMode | 'scale-down' = fit === undefined ? this._resizeMode : fit === 'fill' ? 'stretch' : fit === 'none' ? 'center' : fit
+    // destination rect + source crop (UV fractions) for the chosen fit
+    let dx = cx
+    let dy = cy
+    let dw = cw
+    let dh = ch
+    let crop: { u: number; v: number; u2: number; v2: number } | undefined
+    switch (mode) {
+      case 'contain':
+      case 'scale-down': {
+        const s = mode === 'scale-down' ? Math.min(1, cw / iw, ch / ih) : Math.min(cw / iw, ch / ih)
+        dw = iw * s
+        dh = ih * s
+        dx = cx + (cw - dw) / 2
+        dy = cy + (ch - dh) / 2
         break
       }
       case 'cover': {
@@ -133,21 +147,32 @@ export class Image extends UINode {
         const vh = ch / s / ih
         const u = (1 - vw) / 2
         const v = (1 - vh) / 2
-        ctx.image(src, { x: cx, y: cy, width: cw, height: ch }, { tint, radius, crop: { u, v, u2: u + vw, v2: v + vh } })
+        crop = { u, v, u2: u + vw, v2: v + vh }
         break
       }
       case 'center': {
         const vw = Math.min(1, cw / iw)
         const vh = Math.min(1, ch / ih)
-        const dw = iw * vw
-        const dh = ih * vh
+        dw = iw * vw
+        dh = ih * vh
+        dx = cx + (cw - dw) / 2
+        dy = cy + (ch - dh) / 2
         const u = (1 - vw) / 2
         const v = (1 - vh) / 2
-        ctx.image(src, { x: cx + (cw - dw) / 2, y: cy + (ch - dh) / 2, width: dw, height: dh }, { tint, radius, crop: { u, v, u2: u + vw, v2: v + vh } })
+        crop = { u, v, u2: u + vw, v2: v + vh }
         break
       }
       default:
-        ctx.image(src, { x: cx, y: cy, width: cw, height: ch }, { tint, radius })
     }
+    const imageRadius = radius
+
+    // `drop-shadow()`: a tinted, offset copy of the alpha silhouette underneath (blur is not applied — see the README)
+    const shadows = cs.dropShadow
+    for (let i = shadows.length - 1; i >= 0; i--) {
+      const s = shadows[i]!
+      if (s.color.a <= 0) continue
+      ctx.image(src, { x: dx + s.offsetX, y: dy + s.offsetY, width: dw, height: dh }, { tint: s.color, radius: imageRadius, silhouette: true, ...(crop ? { crop } : {}) })
+    }
+    ctx.image(src, { x: dx, y: dy, width: dw, height: dh }, { tint, radius: imageRadius, ...(crop ? { crop } : {}) })
   }
 }

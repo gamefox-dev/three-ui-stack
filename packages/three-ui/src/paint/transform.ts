@@ -6,6 +6,10 @@ function angle(v: number | `${number}deg` | `${number}rad`): number {
   return v.endsWith('deg') ? (parseFloat(v) * Math.PI) / 180 : parseFloat(v)
 }
 
+function length(v: number | `${number}%`, basis: number): number {
+  return typeof v === 'number' ? v : (parseFloat(v) / 100) * basis
+}
+
 /**
  * Build the paint transform `T(center) · ops · T(−center)` for a node of size `w × h` whose top-left is the
  * origin of the target space. Returns false when `ops` is empty.
@@ -14,8 +18,8 @@ export function buildTransform(ops: readonly TransformOp[] | undefined, w: numbe
   if (!ops || ops.length === 0) return false
   out.identity().translate(w / 2, h / 2)
   for (const op of ops) {
-    if ('translateX' in op) out.translate(op.translateX, 0)
-    else if ('translateY' in op) out.translate(0, op.translateY)
+    if ('translateX' in op) out.translate(length(op.translateX, w), 0)
+    else if ('translateY' in op) out.translate(0, length(op.translateY, h))
     else if ('scale' in op) out.scale(op.scale, op.scale)
     else if ('scaleX' in op) out.scale(op.scaleX, 1)
     else if ('scaleY' in op) out.scale(1, op.scaleY)

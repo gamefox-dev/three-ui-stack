@@ -13,8 +13,15 @@ export interface GlyphLayoutOptions {
   lineHeight?: number
   /** Extra advance after every glyph. */
   letterSpacing?: number
-  /** Maximum number of lines; extra text is dropped (no ellipsis yet). */
+  /** Maximum number of lines; extra text is dropped (see `ellipsis`). */
   maxLines?: number
+  /** `false` keeps every paragraph on one line (CSS `white-space: nowrap`). Default true. */
+  wrap?: boolean
+  /**
+   * Replace what does not fit (text cut off by `maxLines`, or a nowrap line wider than `width`) with `…`
+   * (`...` when the font lacks it). Default false.
+   */
+  ellipsis?: boolean
 }
 
 export interface LayoutLine {
@@ -41,6 +48,9 @@ export class GlyphLayout {
   /** Distance from the first line top to its baseline. */
   baseline = 0
 
+  /** True when `maxLines` cut off text (even if no ellipsis was requested). */
+  truncated = false
+
   private adv: number[] = []
   private kernAdj: number[] = []
   private gl: Glyph[] = []
@@ -57,7 +67,9 @@ export class GlyphLayout {
     const spacing = options.letterSpacing ?? 0
     const lineHeight = options.lineHeight ?? data.lineHeight * scale
     const align = options.align ?? 'left'
-    const maxLines = options.maxLines ?? Infinity
+    const maxLines = options.maxLines && options.maxLines > 0 ? options.maxLines : Infinity
+    const wrapWidth = options.wrap === false ? Infinity : maxWidth
+    this.truncated = false
 
     this.glyphs.length = 0
     this.quads.length = 0
@@ -75,11 +87,14 @@ export class GlyphLayout {
     while (p <= n && lineCount < maxLines) {
       let q = text.indexOf('\n', p)
       if (q < 0) q = n
-      lineCount = this.layoutParagraph(font, text, p, q, scale, spacing, maxWidth, lineY, lineHeight, maxLines, lineCount)
+      lineCount = this.layoutParagraph(font, text, p, q, scale, spacing, wrapWidth, lineY, lineHeight, maxLines, lineCount)
       lineY = lineCount * lineHeight
       p = q + 1
       if (q === n) break
     }
+    // text that never got a line (maxLines reached before the end of the string)
+    if (p <= n && lineCount >= maxLines && text.slice(p).trim() !== '') this.truncated = true
+    if (options.ellipsis && Number.isFinite(maxWidth)) this.applyEllipsis(font, scale, spacing, maxWidth, maxLines)
     for (const l of this.lines) if (l.width > maxLineWidth) maxLineWidth = l.width
     this.width = maxLineWidth
     this.height = this.lines.length * lineHeight
@@ -181,7 +196,67 @@ export class GlyphLayout {
       start = next
       while (start < count && isSpace[start]! && next !== lineEnd) start++
     }
+    if (start < count) this.truncated = true
     return lineCount
+  }
+
+  /**
+   * Ellipsis pass: the last line when `maxLines` cut text off, and any line wider than `maxWidth` (nowrap).
+   * Glyphs are removed from the end of the line until `…` fits.
+   */
+  private applyEllipsis(font: BitmapFont, scale: number, spacing: number, maxWidth: number, maxLines: number): void {
+    const data = font.data
+    const dot = data.glyphForCodePoint(0x2026)
+    const ell = dot ? [dot] : (() => {
+      const p = data.glyphForCodePoint(0x2e)
+      return p ? [p, p, p] : []
+    })()
+    if (ell.length === 0) return
+    let ellWidth = 0
+    for (const g of ell) ellWidth += g.xAdvance * scale + spacing
+    ellWidth -= spacing
+    for (let li = this.lines.length - 1; li >= 0; li--) {
+      const line = this.lines[li]!
+      const last = li === this.lines.length - 1
+      const cutOff = last && this.truncated && this.lines.length >= maxLines
+      const overflow = line.width > maxWidth + 0.01
+      if (!cutOff && !overflow) continue
+      // pen position at the start of glyph i (before alignment)
+      const pen = (i: number): number => this.quads[i * 4]! - this.glyphs[i]!.xOffset * scale
+      let k = line.end
+      // when text was cut off but the line has room, only the ellipsis is appended
+      let penEnd = line.width
+      while (k > line.start && (penEnd + ellWidth > maxWidth + 0.01 || (k < line.end && this.glyphs[k - 1]!.id === data.glyphForCodePoint(32)?.id))) {
+        k--
+        penEnd = pen(k)
+      }
+      // never leave dangling spaces before the ellipsis
+      while (k > line.start && data.glyphForCodePoint(32) && this.glyphs[k - 1]!.id === data.glyphForCodePoint(32)!.id) {
+        k--
+        penEnd = pen(k)
+      }
+      const removed = line.end - k
+      const addGlyphs: Glyph[] = []
+      const addQuads: number[] = []
+      let x = penEnd
+      for (const g of ell) {
+        addGlyphs.push(g)
+        addQuads.push(x + g.xOffset * scale, line.y + g.yOffset * scale, g.width * scale, g.height * scale)
+        x += g.xAdvance * scale + spacing
+      }
+      this.glyphs.splice(k, removed, ...addGlyphs)
+      this.quads.splice(k * 4, removed * 4, ...addQuads)
+      const delta = addGlyphs.length - removed
+      line.end = k + addGlyphs.length
+      line.width = penEnd + ellWidth
+      for (let j = li + 1; j < this.lines.length; j++) {
+        this.lines[j]!.start += delta
+        this.lines[j]!.end += delta
+      }
+    }
+    let widest = 0
+    for (const l of this.lines) if (l.width > widest) widest = l.width
+    this.width = widest
   }
 
   private pushLine(width: number, y: number): void {

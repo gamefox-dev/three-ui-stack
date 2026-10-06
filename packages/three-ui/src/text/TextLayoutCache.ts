@@ -10,6 +10,11 @@ export interface TextLayoutParams {
   align: TextAlign
   /** Wrap width; `Infinity` for no wrapping. */
   width: number
+  /** `false` = `white-space: nowrap`. */
+  wrap?: boolean
+  /** 0 / undefined = unlimited. */
+  maxLines?: number
+  ellipsis?: boolean
 }
 
 /**
@@ -25,7 +30,7 @@ export class TextLayoutCache {
 
   get(p: TextLayoutParams): GlyphLayout {
     const w = Number.isFinite(p.width) ? Math.round(p.width * 100) / 100 : 'inf'
-    const key = `${p.faceKey}|${p.fontSize}|${p.lineHeight}|${p.letterSpacing}|${p.align}|${w}|${p.text}`
+    const key = `${p.faceKey}|${p.fontSize}|${p.lineHeight}|${p.letterSpacing}|${p.align}|${w}|${p.wrap === false ? 'n' : 'w'}${p.maxLines ?? 0}${p.ellipsis ? 'e' : ''}|${p.text}`
     let layout = this.map.get(key)
     if (layout) {
       this.hits++
@@ -46,6 +51,9 @@ export class TextLayoutCache {
       align: p.align,
       lineHeight: p.lineHeight,
       letterSpacing: p.letterSpacing,
+      ...(p.wrap === false ? { wrap: false } : {}),
+      ...(p.maxLines ? { maxLines: p.maxLines } : {}),
+      ...(p.ellipsis ? { ellipsis: true } : {}),
     })
     this.map.set(key, layout)
     return layout

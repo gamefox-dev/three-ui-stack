@@ -56,6 +56,24 @@
         "vite": "catalog:",
       },
     },
+    "examples/three-ui-game-ui": {
+      "name": "example-three-ui-game-ui",
+      "version": "0.0.0",
+      "dependencies": {
+        "@implicit-invocation/three-2d": "workspace:^",
+        "@implicit-invocation/three-ui": "workspace:^",
+        "@implicit-invocation/three-ui-tailwind": "workspace:^",
+        "example-shared": "workspace:^",
+        "three": "catalog:",
+      },
+      "devDependencies": {
+        "@tailwindcss/vite": "catalog:",
+        "@types/three": "catalog:",
+        "tailwindcss": "catalog:",
+        "typescript": "catalog:",
+        "vite": "catalog:",
+      },
+    },
     "examples/three-ui-react-native-webgpu": {
       "name": "example-three-ui-react-native-webgpu",
       "version": "0.0.0",
@@ -123,7 +141,7 @@
     },
     "packages/three-2d": {
       "name": "@implicit-invocation/three-2d",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "devDependencies": {
         "@types/node": "catalog:",
         "@types/three": "catalog:",
@@ -137,7 +155,7 @@
     },
     "packages/three-2d-font": {
       "name": "@implicit-invocation/three-2d-font",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "bin": {
         "three-2d-font": "./bin/three-2d-font.js",
       },
@@ -158,7 +176,7 @@
     },
     "packages/three-ui": {
       "name": "@implicit-invocation/three-ui",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "dependencies": {
         "@implicit-invocation/three-2d": "workspace:^",
       },
@@ -177,7 +195,7 @@
     },
     "packages/three-ui-react": {
       "name": "@implicit-invocation/three-ui-react",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@implicit-invocation/three-2d": "workspace:^",
         "@implicit-invocation/three-ui": "workspace:^",
@@ -200,7 +218,7 @@
     },
     "packages/three-ui-tailwind": {
       "name": "@implicit-invocation/three-ui-tailwind",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "bin": {
         "three-ui-tailwind": "./bin/three-ui-tailwind.js",
       },
@@ -847,6 +865,8 @@
     "example-three-2d-basic": ["example-three-2d-basic@workspace:examples/three-2d-basic"],
 
     "example-three-ui-basic": ["example-three-ui-basic@workspace:examples/three-ui-basic"],
+
+    "example-three-ui-game-ui": ["example-three-ui-game-ui@workspace:examples/three-ui-game-ui"],
 
     "example-three-ui-react-native-webgpu": ["example-three-ui-react-native-webgpu@workspace:examples/three-ui-react-native-webgpu"],
 

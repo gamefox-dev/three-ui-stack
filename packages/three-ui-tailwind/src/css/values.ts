@@ -277,6 +277,7 @@ export function parseCssColor(input: string): RGBA | null {
   if (!fn) return null
   const name = fn[1]!
   const args = fn[2]!
+  if (/^from\s/.test(args)) return parseRelativeColor(args.slice(5))
   const slash = args.split('/')
   const main = slash[0]!.trim().split(/[\s,]+/).filter(Boolean)
   const alphaTok = slash[1] ?? (name.endsWith('a') && main.length === 4 ? main.pop() : undefined)
@@ -313,6 +314,22 @@ export function parseCssColor(input: string): RGBA | null {
     default:
       return null
   }
+}
+
+/**
+ * `oklab(from <color> l a b / <alpha>)` — the identity-channel relative color Tailwind v4 emits to re-alpha theme
+ * shadow colors. Other channel expressions are not supported.
+ */
+function parseRelativeColor(args: string): RGBA | null {
+  const tokens = splitTopLevel(args, /\s/)
+  const base = tokens[0] ? parseCssColor(tokens[0]) : null
+  if (!base) return null
+  const channels = tokens.slice(1, 4).join(' ')
+  if (!/^(l a b|l c h|r g b|h s l)$/.test(channels)) return null
+  if (tokens.length === 4) return base
+  if (tokens[4] !== '/' || tokens.length !== 6) return null
+  const a = tokens[5] === 'alpha' ? base.a : parseAlpha(tokens[5])
+  return { ...base, a }
 }
 
 /** `color-mix(in <space>, <color> N%, transparent)` — the form Tailwind emits for opacity modifiers. */

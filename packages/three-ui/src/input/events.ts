@@ -3,7 +3,9 @@ import type { UINode } from '../core/UINode'
 export type UIEventPhase = 'none' | 'capture' | 'target' | 'bubble'
 
 export type UIPointerEventType = 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel' | 'pointerenter' | 'pointerleave' | 'click'
-export type UIEventType = UIPointerEventType | 'wheel' | 'keydown' | 'keyup' | 'focus' | 'blur'
+export type UIAnimationEventType = 'animationstart' | 'animationiteration' | 'animationend' | 'animationcancel'
+export type UITransitionEventType = 'transitionstart' | 'transitionend' | 'transitioncancel'
+export type UIEventType = UIPointerEventType | UIAnimationEventType | UITransitionEventType | 'wheel' | 'keydown' | 'keyup' | 'focus' | 'blur'
 
 export interface Modifiers {
   altKey: boolean
@@ -148,6 +150,32 @@ export class UIFocusEvent extends UIEvent {
   }
 }
 
+/** CSS-like animation lifecycle event. They bubble, like their DOM counterparts. */
+export class UIAnimationEvent extends UIEvent {
+  constructor(
+    type: UIAnimationEventType,
+    target: UINode,
+    /** The `@keyframes` name (empty for `node.animate()` animations). */
+    readonly animationName: string,
+    /** Seconds of animation time elapsed (excluding delay), per the CSS events spec. */
+    readonly elapsedTime: number,
+  ) {
+    super(type, target, true)
+  }
+}
+
+export class UITransitionEvent extends UIEvent {
+  constructor(
+    type: UITransitionEventType,
+    target: UINode,
+    /** The style key that transitioned (`backgroundColor`, `transform`…). */
+    readonly propertyName: string,
+    readonly elapsedTime: number,
+  ) {
+    super(type, target, true)
+  }
+}
+
 export type UIEventHandler<E extends UIEvent = UIEvent> = (event: E) => void
 
 export interface EventMap {
@@ -163,6 +191,13 @@ export interface EventMap {
   keyup: UIKeyEvent
   focus: UIFocusEvent
   blur: UIFocusEvent
+  animationstart: UIAnimationEvent
+  animationiteration: UIAnimationEvent
+  animationend: UIAnimationEvent
+  animationcancel: UIAnimationEvent
+  transitionstart: UITransitionEvent
+  transitionend: UITransitionEvent
+  transitioncancel: UITransitionEvent
 }
 
 /** Interaction state bits readable by class resolvers (`hover:`, `active:`, `focus:`, `disabled:`). */

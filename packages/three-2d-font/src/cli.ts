@@ -15,6 +15,7 @@ Options:
   --weight <n>         Override weight (e.g. 700)
   --style <name>       Override style name
   --max-atlas <px>     Maximum atlas edge (default 4096)
+  --stroke <px>        Bake a distance channel for text outlines / shadows (max stroke width at --size)
   -h, --help           Show this help
 
 Output: <base>.png and <base>.json (format "three-2d-bitmap-font", version 1)
@@ -68,6 +69,7 @@ export async function main(argv: string[]): Promise<number> {
     supersample: num('supersample', 4),
     padding: num('padding', 2),
     maxAtlasSize: num('max-atlas', 4096),
+    ...(args.flags.has('stroke') ? { stroke: { maxWidth: num('stroke', 0) } } : {}),
     ...(args.flags.has('family') ? { family: args.flags.get('family')! } : {}),
     ...(args.flags.has('style') ? { style: args.flags.get('style')! } : {}),
     ...(args.flags.has('weight') ? { weight: Number(args.flags.get('weight')) } : {}),

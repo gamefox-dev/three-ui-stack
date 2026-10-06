@@ -10,6 +10,8 @@ export interface UIEnvironment {
   viewport: UIViewport
   colorScheme: 'light' | 'dark'
   theme: string
+  /** `prefers-reduced-motion: reduce` — drives `motion-reduce:` / `motion-safe:` (set with `ui.setMediaFlags`). */
+  reducedMotion: boolean
   platform: 'web' | 'native' | (string & {})
 }
 
@@ -18,6 +20,7 @@ export function createEnvironment(init: Partial<UIEnvironment> & { viewport?: Pa
     viewport: { width: 0, height: 0, pixelRatio: 1, ...init.viewport },
     colorScheme: init.colorScheme ?? 'light',
     theme: init.theme ?? 'default',
+    reducedMotion: init.reducedMotion ?? false,
     platform: init.platform ?? 'web',
   }
 }

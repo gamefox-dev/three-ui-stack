@@ -61,7 +61,7 @@ export class BitmapFont implements Disposable {
       const g = glyphs[i]!
       const w = quads[i * 4 + 2]!
       if (w <= 0 || g.width === 0) continue
-      batch.drawUV(tex, x + quads[i * 4]!, y + quads[i * 4 + 1]!, w, quads[i * 4 + 3]!, g.u, g.v, g.u2, g.v2)
+      batch.drawGlyph(tex, x + quads[i * 4]!, y + quads[i * 4 + 1]!, w, quads[i * 4 + 3]!, g.u, g.v, g.u2, g.v2)
     }
     batch.stats.glyphs += glyphs.length
     if (restore) batch.setColorRGBA(restore.r, restore.g, restore.b, restore.a)

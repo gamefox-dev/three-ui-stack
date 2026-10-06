@@ -4,16 +4,20 @@ import {
   DEP_DISABLED,
   DEP_FOCUS,
   DEP_HOVER,
+  DEP_MOTION,
   DEP_VIEWPORT,
   StateFlags,
   setDefaultClassNameResolver,
   type ClassNameResolver,
+  type KeyframeStyle,
+  type Keyframes,
   type ResolvedClassStyle,
   type Style,
   type UIEnvironment,
   type UINode,
 } from '@implicit-invocation/three-ui'
 import type { Condition, RegistryRule, TailwindRegistry } from './registry'
+import { composeSlots, mergeSlots, type TailwindSlots } from './slots'
 
 interface Plan {
   rules: RegistryRule[]
@@ -27,6 +31,8 @@ export interface TailwindResolver extends ClassNameResolver {
   readonly registry: TailwindRegistry
   /** Resolved theme variable (e.g. `--color-primary` → `#6d5dfc`). */
   themeVar(name: string): string | undefined
+  /** Compiled `@keyframes` by name (used by `animation: name …` / `animate-*`). */
+  keyframes(name: string): Keyframes | undefined
   /** Cache statistics (test/debug hook). */
   readonly stats: { planHits: number; planMisses: number; resolveHits: number; resolveMisses: number }
 }
@@ -52,6 +58,7 @@ export function createTailwindResolver(registry: TailwindRegistry): TailwindReso
   const plans = new Map<string, Plan>()
   const results = new Map<string, ResolvedClassStyle>()
   const stats = { planHits: 0, planMisses: 0, resolveHits: 0, resolveMisses: 0 }
+  const keyframeCache = new Map<string, Keyframes | null>()
 
   const plan = (className: string): Plan => {
     let p = plans.get(className)
@@ -81,13 +88,28 @@ export function createTailwindResolver(registry: TailwindRegistry): TailwindReso
     registry,
     stats,
     themeVar: (name) => registry.vars[name],
+    keyframes(name) {
+      let k = keyframeCache.get(name)
+      if (k === undefined) {
+        const frames = registry.keyframes?.[name]
+        k = frames
+          ? frames.map((f): KeyframeStyle => {
+              // shadow slots inside keyframes (`box-shadow: …`) compose exactly like class rules
+              const { __tw, ...style } = f.style as Style & { __tw?: TailwindSlots }
+              return { ...style, ...(__tw ? composeSlots(__tw) : {}), offset: f.offset, ...(f.easing ? { easing: f.easing } : {}) }
+            })
+          : null
+        keyframeCache.set(name, k)
+      }
+      return k ?? undefined
+    },
     resolve(className: string, node: UINode, env: UIEnvironment): ResolvedClassStyle {
       const p = plan(className)
       if (p.rules.length === 0) return { style: EMPTY, deps: 0 }
       const width = env.viewport.width
       let bp = 0
       for (let i = 0; i < bpList.length; i++) if (width >= bpList[i]!) bp |= 1 << i
-      const key = `${className}\u0000${node.state & 15}\u0000${env.colorScheme}\u0000${bp}`
+      const key = `${className}\u0000${node.state & 15}\u0000${env.colorScheme}\u0000${bp}\u0000${env.reducedMotion ? 1 : 0}`
       const hit = results.get(key)
       if (hit) {
         stats.resolveHits++
@@ -101,12 +123,21 @@ export function createTailwindResolver(registry: TailwindRegistry): TailwindReso
         if (rule.defaults) defaults = { ...(defaults ?? {}), ...rule.defaults }
         for (const k in rule.style) {
           const v = (rule.style as Record<string, unknown>)[k]
+          if (k === '__tw') {
+            // shadow pieces from different utilities (`shadow-lg ring-2 ring-blue-500`) merge per slot
+            style[k] = mergeSlots(style[k] as TailwindSlots | undefined, v as TailwindSlots)
+            continue
+          }
           // individual transforms (scale-95 + rotate-12) compose instead of replacing each other
           style[k] = k === 'transform' && Array.isArray(style[k]) ? [...(style[k] as unknown[]), ...(v as unknown[])] : v
         }
       }
       // CSS initial values only fill properties no active rule set explicitly
       if (defaults) for (const k in defaults) if (style[k] === undefined) style[k] = defaults[k]
+      if (style.__tw) {
+        Object.assign(style, composeSlots(style.__tw as TailwindSlots))
+        delete style.__tw
+      }
       const result: ResolvedClassStyle = { style: style as Style, deps: p.deps }
       if (results.size > 10000) results.clear()
       results.set(key, result)
@@ -121,12 +152,14 @@ const EMPTY: Style = Object.freeze({}) as Style
 function conditionDeps(c: Condition): number {
   if ('state' in c) return STATE_DEP[c.state]
   if ('scheme' in c) return DEP_COLOR_SCHEME
+  if ('reducedMotion' in c) return DEP_MOTION
   return DEP_VIEWPORT
 }
 
 function holds(c: Condition, state: number, env: UIEnvironment): boolean {
   if ('state' in c) return (state & STATE_FLAG[c.state]) !== 0
   if ('scheme' in c) return env.colorScheme === c.scheme
+  if ('reducedMotion' in c) return env.reducedMotion === c.reducedMotion
   if ('minWidth' in c) return env.viewport.width >= c.minWidth
   return env.viewport.width < c.maxWidth
 }

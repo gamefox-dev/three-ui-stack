@@ -15,3 +15,4 @@ export const DEP_DISABLED = 8
 export const DEP_COLOR_SCHEME = 16
 export const DEP_VIEWPORT = 32
 export const DEP_THEME = 64
+export const DEP_MOTION = 128

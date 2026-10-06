@@ -1,5 +1,71 @@
 import { Color4, parseColor } from '@implicit-invocation/three-2d'
-import { INHERITED_KEYS, type AlignValue, type FlexDirection, type FlexWrap, type JustifyValue, type Length, type NonAutoLength, type Overflow, type Style, type StyleProp, type TextAlign, type TransformOp } from './types'
+import {
+  INHERITED_KEYS,
+  type AlignValue,
+  type Angle,
+  type AnimationSpec,
+  type BackgroundGradient,
+  type BoxShadow,
+  type DropShadow,
+  type Easing,
+  type FlexDirection,
+  type FlexWrap,
+  type GradientCorner,
+  type GradientLength,
+  type JustifyValue,
+  type Length,
+  type NonAutoLength,
+  type Overflow,
+  type RadialSize,
+  type Style,
+  type StyleProp,
+  type TextAlign,
+  type TextShadow,
+  type TransformOp,
+  type TransitionSpec,
+} from './types'
+
+export interface ResolvedGradientStop {
+  color: Color4
+  position: GradientLength | undefined
+}
+
+/** A gradient with parsed colors and every `from/via/to` helper folded in. */
+export type ResolvedGradient =
+  | { type: 'linear'; colorSpace: 'srgb' | 'oklab'; angle: Angle | GradientCorner; stops: readonly ResolvedGradientStop[] }
+  | {
+      type: 'radial'
+      colorSpace: 'srgb' | 'oklab'
+      shape: 'circle' | 'ellipse'
+      size: RadialSize | number | readonly [GradientLength, GradientLength]
+      at: readonly [GradientLength | 'left' | 'center' | 'right', GradientLength | 'top' | 'center' | 'bottom']
+      stops: readonly ResolvedGradientStop[]
+    }
+
+export interface ResolvedBoxShadow {
+  offsetX: number
+  offsetY: number
+  blur: number
+  spread: number
+  color: Color4
+  /** True when the color follows the node's text color (`currentColor`). */
+  currentColor: boolean
+  inset: boolean
+}
+
+export interface ResolvedTextShadow {
+  offsetX: number
+  offsetY: number
+  blur: number
+  color: Color4
+}
+
+export interface ResolvedTransition {
+  property: string
+  duration: number
+  delay: number
+  easing: Easing
+}
 
 /** Fully resolved style. This — not Yoga — is the source of truth for layout, paint and text. */
 export interface ComputedStyle {
@@ -55,7 +121,19 @@ export interface ComputedStyle {
   opacity: number
   borderColor: Color4
   borderRadius: number
+  borderTopLeftRadius: number | undefined
+  borderTopRightRadius: number | undefined
+  borderBottomRightRadius: number | undefined
+  borderBottomLeftRadius: number | undefined
+  backgroundGradient: ResolvedGradient | undefined
+  /** Outer and inset shadows, first = top-most. */
+  boxShadow: readonly ResolvedBoxShadow[]
   tintColor: Color4
+  objectFit: 'fill' | 'contain' | 'cover' | 'none' | 'scale-down' | undefined
+  dropShadow: readonly ResolvedTextShadow[]
+  backdropBlur: number
+  backdropBrightness: number
+  backdropSaturate: number
   zIndex: number
   transform: readonly TransformOp[] | undefined
   pointerEvents: 'auto' | 'none'
@@ -70,6 +148,18 @@ export interface ComputedStyle {
   lineHeight: number | `${number}em` | undefined
   letterSpacing: number | `${number}em`
   textAlign: TextAlign
+  textStrokeWidth: number
+  /** `undefined` follows `color`. */
+  textStrokeColor: Color4 | undefined
+  paintOrder: 'normal' | 'stroke'
+  textShadow: readonly ResolvedTextShadow[]
+  whiteSpace: 'normal' | 'nowrap'
+  textOverflow: 'clip' | 'ellipsis'
+  numberOfLines: number | undefined
+
+  animation: readonly AnimationSpec[]
+  animationLayout: boolean
+  transition: readonly ResolvedTransition[]
 }
 
 type Key = keyof ComputedStyle
@@ -123,11 +213,35 @@ export const LAYOUT_KEYS = [
   'borderLeftWidth',
 ] as const satisfies readonly Key[]
 
-export const PAINT_KEYS = ['backgroundColor', 'opacity', 'borderColor', 'borderRadius', 'tintColor', 'zIndex', 'transform', 'pointerEvents'] as const satisfies readonly Key[]
+export const PAINT_KEYS = [
+  'backgroundColor',
+  'opacity',
+  'borderColor',
+  'borderRadius',
+  'borderTopLeftRadius',
+  'borderTopRightRadius',
+  'borderBottomRightRadius',
+  'borderBottomLeftRadius',
+  'backgroundGradient',
+  'boxShadow',
+  'tintColor',
+  'objectFit',
+  'dropShadow',
+  'backdropBlur',
+  'backdropBrightness',
+  'backdropSaturate',
+  'zIndex',
+  'transform',
+  'pointerEvents',
+] as const satisfies readonly Key[]
 
 /** Text keys that change measurement (font identity/size/spacing/alignment). `color` is paint-only. */
-export const TEXT_METRIC_KEYS = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign'] as const satisfies readonly Key[]
+export const TEXT_METRIC_KEYS = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign', 'whiteSpace', 'textOverflow', 'numberOfLines'] as const satisfies readonly Key[]
 
+const NO_SHADOWS: readonly ResolvedBoxShadow[] = Object.freeze([])
+const NO_TEXT_SHADOWS: readonly ResolvedTextShadow[] = Object.freeze([])
+const NO_ANIMATIONS: readonly AnimationSpec[] = Object.freeze([])
+const NO_TRANSITIONS: readonly ResolvedTransition[] = Object.freeze([])
 const TRANSPARENT = new Color4(0, 0, 0, 0)
 const BLACK = new Color4(0, 0, 0, 1)
 const WHITE = new Color4(1, 1, 1, 1)
@@ -184,7 +298,18 @@ export function createDefaultComputedStyle(): ComputedStyle {
     opacity: 1,
     borderColor: BLACK,
     borderRadius: 0,
+    borderTopLeftRadius: undefined,
+    borderTopRightRadius: undefined,
+    borderBottomRightRadius: undefined,
+    borderBottomLeftRadius: undefined,
+    backgroundGradient: undefined,
+    boxShadow: NO_SHADOWS,
     tintColor: WHITE,
+    objectFit: undefined,
+    dropShadow: NO_TEXT_SHADOWS,
+    backdropBlur: 0,
+    backdropBrightness: 1,
+    backdropSaturate: 1,
     zIndex: 0,
     transform: undefined,
     pointerEvents: 'auto',
@@ -196,6 +321,16 @@ export function createDefaultComputedStyle(): ComputedStyle {
     lineHeight: undefined,
     letterSpacing: 0,
     textAlign: 'auto',
+    textStrokeWidth: 0,
+    textStrokeColor: undefined,
+    paintOrder: 'normal',
+    textShadow: NO_TEXT_SHADOWS,
+    whiteSpace: 'normal',
+    textOverflow: 'clip',
+    numberOfLines: undefined,
+    animation: NO_ANIMATIONS,
+    animationLayout: false,
+    transition: NO_TRANSITIONS,
   }
 }
 
@@ -217,9 +352,28 @@ export function flattenStyleProp(style: StyleProp, out: Style[] = []): Style[] {
  * `flex: n` → `n 1 0` (n > 0), `0 0 auto` (0), `0 -n auto` (n < 0); `"g s b"` strings follow CSS.
  */
 export function normalizeStyle(style: Style): Style {
-  if (style.flex === undefined) return style
-  const { flex, ...rest } = style
+  if (style.flex === undefined && style.transition === undefined) return style
+  const { flex, transition, ...rest } = style
   const out: Style = { ...rest }
+  if (flex !== undefined) normalizeFlex(flex, out)
+  if (transition !== undefined) expandTransition(transition, out)
+  return out
+}
+
+/** `transition: …` → the four longhands (as lists), so layers override each longhand independently like CSS. */
+function expandTransition(transition: NonNullable<Style['transition']>, out: Style): void {
+  if (transition === 'none') {
+    out.transitionProperty = 'none'
+    return
+  }
+  const specs = (Array.isArray(transition) ? transition : [transition]) as readonly TransitionSpec[]
+  out.transitionProperty = specs.map((t) => t.property)
+  out.transitionDuration = specs.map((t) => t.duration ?? 0)
+  out.transitionDelay = specs.map((t) => t.delay ?? 0)
+  out.transitionTimingFunction = specs.map((t) => t.easing ?? 'ease')
+}
+
+function normalizeFlex(flex: NonNullable<Style['flex']>, out: Style): void {
   if (typeof flex === 'number') {
     if (flex > 0) Object.assign(out, { flexGrow: flex, flexShrink: 1, flexBasis: 0 })
     else if (flex === 0) Object.assign(out, { flexGrow: 0, flexShrink: 0, flexBasis: 'auto' })
@@ -239,7 +393,6 @@ export function normalizeStyle(style: Style): Style {
       out.flexBasis = basisStr === undefined ? 0 : basisStr === 'auto' ? 'auto' : basisStr.endsWith('px') ? parseFloat(basisStr) : (basisStr as `${number}%`)
     }
   }
-  return out
 }
 
 function toColor(value: unknown): Color4 {
@@ -253,16 +406,105 @@ function toWeight(w: unknown): number {
   return Number.isFinite(n) ? n : 400
 }
 
-const COLOR_KEYS: ReadonlySet<string> = new Set(['backgroundColor', 'borderColor', 'tintColor', 'color'])
+const COLOR_KEYS: ReadonlySet<string> = new Set(['backgroundColor', 'borderColor', 'tintColor', 'color', 'textStrokeColor'])
 const INHERITED: ReadonlySet<string> = new Set(INHERITED_KEYS)
 
 const ALL_KEYS = Object.keys(DEFAULTS) as Key[]
 
+const resolvedCache = new WeakMap<object, unknown>()
+
+/** Resolve-once-per-source-object: stable identity keeps inherited-value comparisons cheap. */
+function cached<T>(raw: object, make: () => T): T {
+  let hit = resolvedCache.get(raw) as T | undefined
+  if (hit === undefined) {
+    hit = make()
+    resolvedCache.set(raw, hit)
+  }
+  return hit
+}
+
+function asList<T>(v: T | readonly T[] | undefined): readonly T[] {
+  return v === undefined ? [] : Array.isArray(v) ? (v as readonly T[]) : [v as T]
+}
+
+function resolveBoxShadows(raw: BoxShadow | readonly BoxShadow[]): readonly ResolvedBoxShadow[] {
+  return asList(raw).map((s) => {
+    const currentColor = s.color === undefined || (typeof s.color === 'string' && s.color.toLowerCase() === 'currentcolor')
+    return {
+      offsetX: s.offsetX ?? 0,
+      offsetY: s.offsetY ?? 0,
+      blur: Math.max(0, s.blur ?? 0),
+      spread: s.spread ?? 0,
+      color: currentColor ? BLACK : toColor(s.color),
+      currentColor,
+      inset: s.inset === true,
+    }
+  })
+}
+
+function resolveTextShadows(raw: TextShadow | DropShadow | readonly (TextShadow | DropShadow)[]): readonly ResolvedTextShadow[] {
+  return asList(raw).map((s) => ({ offsetX: s.offsetX ?? 0, offsetY: s.offsetY ?? 0, blur: Math.max(0, s.blur ?? 0), color: s.color === undefined ? BLACK : toColor(s.color) }))
+}
+
+/** Convert one authored style value to its computed representation (colors → `Color4`, shadows → resolved lists…). */
+export function resolveStyleValue(key: string, value: unknown): unknown {
+  return normalizeValue(key as Key, value)
+}
+
 function normalizeValue(key: Key, value: unknown): unknown {
   if (COLOR_KEYS.has(key)) return toColor(value)
-  if (key === 'fontWeight') return toWeight(value)
-  if (key === 'opacity') return Math.min(1, Math.max(0, value as number))
-  return value
+  switch (key) {
+    case 'fontWeight':
+      return toWeight(value)
+    case 'opacity':
+      return Math.min(1, Math.max(0, value as number))
+    case 'boxShadow':
+      return value === 'none' ? NO_SHADOWS : cached(value as object, () => resolveBoxShadows(value as BoxShadow))
+    case 'textShadow':
+    case 'dropShadow':
+      return value === 'none' ? NO_TEXT_SHADOWS : cached(value as object, () => resolveTextShadows(value as TextShadow))
+    case 'animation':
+      return value === 'none' ? NO_ANIMATIONS : cached(value as object, () => asList(value as AnimationSpec))
+    default:
+      return value
+  }
+}
+
+/** Resolve an authored gradient (explicit stops) outside of a cascade, e.g. inside keyframes. */
+export function resolveGradientValue(g: BackgroundGradient | 'none' | undefined): ResolvedGradient | undefined {
+  return g && g !== 'none' ? resolveGradient(g, () => undefined) : undefined
+}
+
+function resolveGradient(g: BackgroundGradient, pick: (k: string) => unknown): ResolvedGradient | undefined {
+  let stops: ResolvedGradientStop[]
+  if (g.stops && g.stops.length > 0) {
+    stops = g.stops.map((s) => ({ color: toColor(s.color), position: s.position }))
+  } else {
+    const from = pick('gradientFrom')
+    const via = pick('gradientVia')
+    const to = pick('gradientTo')
+    if (from === undefined && via === undefined && to === undefined) return undefined
+    stops = [{ color: toColor(from ?? TRANSPARENT), position: pick('gradientFromPosition') as GradientLength | undefined }]
+    if (via !== undefined) stops.push({ color: toColor(via), position: pick('gradientViaPosition') as GradientLength | undefined })
+    stops.push({ color: toColor(to ?? TRANSPARENT), position: pick('gradientToPosition') as GradientLength | undefined })
+  }
+  if (g.type === 'linear') return { type: 'linear', colorSpace: g.colorSpace ?? 'srgb', angle: g.angle ?? 180, stops }
+  return { type: 'radial', colorSpace: g.colorSpace ?? 'srgb', shape: g.shape ?? 'ellipse', size: g.size ?? 'farthest-corner', at: g.at ?? ['50%', '50%'], stops }
+}
+
+function resolveTransitions(pick: (k: string) => unknown): readonly ResolvedTransition[] {
+  const props = asList(pick('transitionProperty') as string | readonly string[] | undefined)
+  if (props.length === 0 || (props.length === 1 && props[0] === 'none')) return NO_TRANSITIONS
+  const durations = asList(pick('transitionDuration') as number | readonly number[] | undefined)
+  const delays = asList(pick('transitionDelay') as number | readonly number[] | undefined)
+  const easings = asList(pick('transitionTimingFunction') as Easing | readonly Easing[] | undefined)
+  const out: ResolvedTransition[] = []
+  for (let i = 0; i < props.length; i++) {
+    const duration = durations.length ? durations[i % durations.length]! : 0
+    if (!(duration > 0)) continue
+    out.push({ property: props[i]!, duration, delay: delays.length ? delays[i % delays.length]! : 0, easing: easings.length ? easings[i % easings.length]! : 'ease' })
+  }
+  return out.length ? out : NO_TRANSITIONS
 }
 
 /**
@@ -290,6 +532,10 @@ export function computeStyle(layers: readonly Style[], parent: ComputedStyle | n
       out[key] = normalizeValue(key, defaults[key])
     }
   }
+  const pick = (k: string): unknown => explicit[k] ?? defaults?.[k]
+  const gradient = pick('backgroundGradient') as BackgroundGradient | 'none' | undefined
+  out.backgroundGradient = gradient && gradient !== 'none' ? resolveGradient(gradient, pick) : undefined
+  out.transition = resolveTransitions(pick)
   return out as unknown as ComputedStyle
 }
 
@@ -308,4 +554,20 @@ export function stylesEqual<K extends Key>(a: ComputedStyle, b: ComputedStyle, k
 /** Color4 values are compared structurally for paint diffing. */
 export function colorsEqual(a: Color4, b: Color4): boolean {
   return a === b || (a.r === b.r && a.g === b.g && a.b === b.b && a.a === b.a)
+}
+
+/** Structural equality for computed values (colors, shadow lists, plain objects). */
+export function valuesEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
+  if (a instanceof Color4) return b instanceof Color4 && colorsEqual(a, b)
+  if (Array.isArray(a)) {
+    if (!Array.isArray(b) || a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) if (!valuesEqual(a[i], b[i])) return false
+    return true
+  }
+  const ka = Object.keys(a)
+  if (ka.length !== Object.keys(b).length) return false
+  for (const k of ka) if (!valuesEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k])) return false
+  return true
 }

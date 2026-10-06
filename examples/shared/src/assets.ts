@@ -28,3 +28,9 @@ export async function registerInterFonts(registry: FontRegistry): Promise<void> 
   const fonts = await Promise.all(names.map(loadBitmapFont))
   for (const f of fonts) registry.register(f)
 }
+
+/** Register the stroke-capable "Inter Display" faces (weight 800): the only fonts baked with a distance channel for text outlines / shadows. */
+export async function registerDisplayFonts(registry: FontRegistry): Promise<void> {
+  const fonts = await Promise.all(['game-display-32', 'game-display-64'].map(loadBitmapFont))
+  for (const f of fonts) registry.register(f)
+}

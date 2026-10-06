@@ -1,4 +1,4 @@
-import { DataTexture, RGBAFormat, UnsignedByteType, Vector4, type Camera, type Object3D, type Mesh } from 'three'
+import { DataTexture, RGBAFormat, UnsignedByteType, Vector2, Vector4, type Camera, type Object3D, type Mesh, type RenderTarget } from 'three'
 import { configureTexture, type BatchRenderer } from '../src'
 
 export function makeTexture(width = 64, height = 64): DataTexture {
@@ -43,5 +43,30 @@ export class MockRenderer implements BatchRenderer {
   }
   setScissorTest(v: boolean): void {
     this.scissorTest = v
+  }
+}
+
+/** MockRenderer + the extra surface backdrop blur needs; records the order of renders / copies / render-target switches. */
+export class MockBackdropRenderer extends MockRenderer {
+  events: string[] = []
+  private target: RenderTarget | null = null
+  drawingBuffer = new Vector2(800, 600)
+
+  override render(scene: Object3D, camera: Camera): void {
+    const before = this.calls.length
+    super.render(scene, camera)
+    this.events.push(this.target ? 'blur-pass' : `render:${this.calls[before]!.meshes.length}`)
+  }
+  getRenderTarget(): RenderTarget | null {
+    return this.target
+  }
+  setRenderTarget(t: RenderTarget | null): void {
+    this.target = t
+  }
+  getDrawingBufferSize(target: Vector2): Vector2 {
+    return target.copy(this.drawingBuffer)
+  }
+  copyFramebufferToTexture(): void {
+    this.events.push('copy')
   }
 }

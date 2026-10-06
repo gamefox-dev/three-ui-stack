@@ -41,17 +41,17 @@ describe('threeUITailwind (Vite plugin)', () => {
     // unsupported utilities in the scanned source warn at build/dev time instead of emitting nonsense
     const warnings = warn.mock.calls.map((c) => String(c[0]))
     expect(warnings.some((w) => /"grid"/.test(w))).toBe(true)
-    expect(warnings.some((w) => /"shadow-md"/.test(w))).toBe(true)
+    expect(warnings.some((w) => /"blur-sm"/.test(w))).toBe(true)
     expect(tokens).not.toContain('grid')
-    expect(tokens).not.toContain('shadow-md')
+    expect(tokens).not.toContain('blur-sm')
   })
 
   it('ignores warnings for configured tokens', async () => {
     const warn = vi.fn()
-    const plugin = threeUITailwind({ css: './src/theme.css', ignoreWarningsFor: ['grid', 'shadow-md', 'transform'] }) as unknown as Hooks
+    const plugin = threeUITailwind({ css: './src/theme.css', ignoreWarningsFor: ['grid', 'blur-sm', 'transform'] }) as unknown as Hooks
     plugin.configResolved({ root: app, command: 'build', logger: { warn } })
     await plugin.buildStart.call({ addWatchFile() {} })
-    expect(warn.mock.calls.map((c) => String(c[0])).filter((w) => /"(grid|shadow-md)"/.test(w))).toEqual([])
+    expect(warn.mock.calls.map((c) => String(c[0])).filter((w) => /"(grid|blur-sm)"/.test(w))).toEqual([])
   })
 })
 

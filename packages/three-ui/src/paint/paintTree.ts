@@ -38,7 +38,10 @@ function paintNode(node: UINode, ox: number, oy: number, ctx: BatchDrawContext, 
     const maxX = clip ? clip.x + clip.width : vw
     const maxY = clip ? clip.y + clip.height : vh
     const mayCull = parentCulls || cs.overflow !== 'visible' || node.children.length === 0
-    if (mayCull && (x >= maxX || y >= maxY || x + w <= minX || y + h <= minY)) {
+    // outer shadows paint outside the box: keep nodes whose shadow still reaches into view
+    let reach = 0
+    for (const sh of cs.boxShadow) if (!sh.inset) reach = Math.max(reach, Math.max(Math.abs(sh.offsetX), Math.abs(sh.offsetY)) + sh.blur * 1.5 + Math.max(0, sh.spread))
+    if (mayCull && (x - reach >= maxX || y - reach >= maxY || x + w + reach <= minX || y + h + reach <= minY)) {
       stats.nodesCulled++
       return
     }

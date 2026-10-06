@@ -109,14 +109,13 @@ describe('Tailwind v4 → registry', () => {
   })
 
   it('warns for unsupported utilities instead of emitting nonsense', async () => {
-    const { registry, warnings } = await compileTokens(['grid', 'shadow-md', 'space-x-4', 'group-hover:bg-white', 'first:p-2', 'rounded-t-lg', 'uppercase', 'p-4'])
+    const { registry, warnings } = await compileTokens(['grid', 'blur-sm', 'space-x-4', 'group-hover:bg-white', 'first:p-2', 'uppercase', 'p-4'])
     const text = warnings.join('\n')
     expect(text).toMatch(/"grid".*display/)
-    expect(text).toMatch(/"shadow-md".*box-shadow/)
+    expect(text).toMatch(/"blur-sm".*filter/)
     expect(text).toMatch(/space-x-4/)
     expect(text).toMatch(/group-hover/)
     expect(text).toMatch(/first:p-2|pseudo-class :first-child/)
-    expect(text).toMatch(/rounded-t-lg/)
     expect(text).toMatch(/uppercase.*text-transform/)
     expect(registry.rules.map((r) => r.token)).toEqual(['p-4'])
   })

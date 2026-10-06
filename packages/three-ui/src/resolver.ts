@@ -1,6 +1,6 @@
 import type { UINode } from './core/UINode'
 import type { UIEnvironment } from './env'
-import type { Style } from './style/types'
+import type { Keyframes, Style } from './style/types'
 
 export interface ResolvedClassStyle {
   style: Style
@@ -17,6 +17,8 @@ export interface ResolvedClassStyle {
  */
 export interface ClassNameResolver {
   resolve(className: string, node: UINode, env: UIEnvironment): ResolvedClassStyle
+  /** Named keyframes (`animation: spin 1s linear infinite`, Tailwind `@keyframes`). */
+  keyframes?(name: string): Keyframes | undefined
 }
 
 let defaultResolver: ClassNameResolver | null = null

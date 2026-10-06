@@ -1,5 +1,5 @@
 import { isDevMode, warnOnce } from '../dev'
-import { createDefaultComputedStyle, colorsEqual, computeStyle, flattenStyleProp, normalizeStyle, type ComputedStyle } from '../style/computed'
+import { createDefaultComputedStyle, computeStyle, flattenStyleProp, normalizeStyle, valuesEqual, type ComputedStyle } from '../style/computed'
 import { INHERITED_KEYS, type Style, type StyleProp } from '../style/types'
 import { syncYoga } from '../style/yogaSync'
 import { getYogaConfig, getYogaRuntime, type YogaNode } from '../yoga/runtime'
@@ -7,6 +7,9 @@ import { StateFlags, type EventMap, type UIEvent, type UIEventHandler, type UIEv
 import { CHILD_ORDER_DIRTY, DEP_ACTIVE, DEP_DISABLED, DEP_FOCUS, DEP_HOVER, PAINT_DIRTY, STYLE_DIRTY, SUBTREE_STYLE_DIRTY, TEXT_DIRTY } from './flags'
 import type { ThreeUI } from './ThreeUI'
 import type { UIDrawContext } from '../paint/DrawContext'
+import type { NodeFx } from '../anim/engine'
+import type { UIAnimation } from '../anim/Animation'
+import type { AnimationOptions, Keyframes } from '../style/types'
 
 export type NodeKind = 'View' | 'Text' | 'Image' | 'AnimatedImage' | 'NinePatchView' | 'ScrollView'
 
@@ -58,6 +61,8 @@ export abstract class UINode {
   /** @internal */ classDeps = 0
   /** @internal */ _ui: ThreeUI | null = null
   /** @internal */ readonly _yoga: YogaNode
+  /** @internal Animation / transition state; null while nothing animates. */
+  _fx: NodeFx | null = null
 
   private readonly _children: UINode[] = []
   private _style: StyleProp
@@ -146,6 +151,8 @@ export abstract class UINode {
     if (this._ui === ui) return
     const old = this._ui
     this._ui = ui
+    if (old) old.engine.nodes.delete(this)
+    if (ui && this._fx) ui.engine.nodes.add(this)
     if (old && !ui) old.input._nodeDetached(this)
     this.onAttach(old, ui)
     for (const c of this._children) c._attach(ui)
@@ -256,7 +263,9 @@ export abstract class UINode {
     }
     this.classDeps = deps
     for (const s of flattenStyleProp(this._style)) layers.push(normalizeStyle(s))
-    const next = computeStyle(layers, parentStyle, this.defaultStyle)
+    const base = computeStyle(layers, parentStyle, this.defaultStyle)
+    // animations and transitions write over a copy of the cascade result; `next` is what layout and paint see
+    const next = ui.engine.resolve(this, base, this._fx?.base ?? prev, prev)
     const layoutChanged = syncYoga(this._yoga, prev, next)
     this.computedStyle = next
     this._styleComputedOnce = true
@@ -268,14 +277,30 @@ export abstract class UINode {
       for (const k of INHERITED_KEYS) {
         const a = prev[k]
         const b = next[k]
-        if (a === b) continue
-        if (typeof a === 'object' && typeof b === 'object' && colorsEqual(a as never, b as never)) continue
+        if (valuesEqual(a, b)) continue
         inheritedChanged = true
         break
       }
     }
     this.onStyleApplied(prev, next, layoutChanged)
     return inheritedChanged
+  }
+
+  /**
+   * Animate this node with Web-Animations-like keyframes. Time advances only through `ui.update(dt)`; the returned
+   * handle can `pause()` / `cancel()` / `finish()` and its `finished` promise resolves at the end.
+   * Layout properties (width, margin…) are ignored unless `options.layout` is true — they re-run Yoga every frame.
+   */
+  animate(keyframes: Keyframes, options: number | AnimationOptions = {}): UIAnimation {
+    this.assertAlive('animate')
+    const ui = this._ui
+    if (!ui) throw new Error('[three-ui] animate() needs the node to be attached to a ThreeUI (setRoot / append first)')
+    return ui.engine.animate(this, keyframes, options)
+  }
+
+  /** @internal The engine changed layout / text-affecting values of `computedStyle` in place. */
+  _afterAnimatedStyle(prev: ComputedStyle, next: ComputedStyle, layoutChanged: boolean): void {
+    this.onStyleApplied(prev, next, layoutChanged)
   }
 
   /** Hook for subclasses (e.g. invalidate cached text when font properties change). */

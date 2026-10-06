@@ -1,5 +1,6 @@
 import { Color4, TextureRegion, type Affine2, type BatchSegment, type GlyphLayout, type NinePatch, type PolygonSpriteBatch, type Rect } from '@implicit-invocation/three-2d'
-import type { ImagePaint, NinePatchPaint, RectPaint, TextPaint, UIDrawContext } from './DrawContext'
+import { warnOnce } from '../dev'
+import type { BackdropPaint, BoxPaint, ImagePaint, NinePatchPaint, RectPaint, ShadowPaint, TextPaint, UIDrawContext } from './DrawContext'
 
 export interface PaintCounters {
   paintOps: number
@@ -47,6 +48,47 @@ export class BatchDrawContext implements UIDrawContext {
     })
   }
 
+  box(rect: Rect, paint: BoxPaint): void {
+    this.counters.paintOps++
+    this.batch.fillBox({
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+      radii: paint.radii,
+      ...(paint.borderWidths ? { borderWidths: paint.borderWidths } : {}),
+      ...(paint.borderColor ? { borderColor: paint.borderColor } : {}),
+      ...(paint.background ? { background: paint.background } : {}),
+      ...(paint.gradient ? { gradient: paint.gradient } : {}),
+      opacity: this.opacity,
+    })
+  }
+
+  backdrop(rect: Rect, paint: BackdropPaint): void {
+    if (this.batch.fillBackdrop({ x: rect.x, y: rect.y, width: rect.width, height: rect.height, radii: paint.radii, blur: paint.blur, brightness: paint.brightness, saturate: paint.saturate, opacity: this.opacity })) {
+      this.counters.paintOps++
+    }
+  }
+
+  shadow(rect: Rect, paint: ShadowPaint): void {
+    this.counters.paintOps++
+    this.batch.fillShadow({
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+      radii: paint.radii,
+      ...(paint.borderWidths ? { borderWidths: paint.borderWidths } : {}),
+      offsetX: paint.offsetX,
+      offsetY: paint.offsetY,
+      blur: paint.blur,
+      spread: paint.spread,
+      color: paint.color,
+      inset: paint.inset,
+      opacity: this.opacity,
+    })
+  }
+
   image(region: TextureRegion, rect: Rect, paint: ImagePaint = {}): void {
     this.counters.paintOps++
     const t = paint.tint ?? WHITE
@@ -73,14 +115,14 @@ export class BatchDrawContext implements UIDrawContext {
     const pb = prev.b
     const pa = prev.a
     batch.setColorRGBA(t.r, t.g, t.b, t.a * this.opacity)
-    if (radius > 0) {
+    if (radius > 0 || paint.silhouette) {
       const scratch = (this.scratchRegion ??= new TextureRegion(region.texture))
       scratch.texture = region.texture
       scratch.u = u
       scratch.v = v
       scratch.u2 = u2
       scratch.v2 = v2
-      batch.drawEx(scratch, { x: rect.x, y: rect.y, width: rect.width, height: rect.height, radius })
+      batch.drawEx(scratch, { x: rect.x, y: rect.y, width: rect.width, height: rect.height, radius, ...(paint.silhouette ? { silhouette: true } : {}) })
     } else {
       batch.drawUV(region.texture, rect.x, rect.y, rect.width, rect.height, u, v, u2, v2)
     }
@@ -109,23 +151,96 @@ export class BatchDrawContext implements UIDrawContext {
     const snap = this.snap
     x = Math.round(x / snap) * snap
     y = Math.round(y / snap) * snap
-    const c = paint.color
     const prev = batch.color
     const pr = prev.r
     const pg = prev.g
     const pb = prev.b
     const pa = prev.a
-    batch.setColorRGBA(c.r, c.g, c.b, c.a * this.opacity)
+    const fx = paint.effects
+    const o = this.opacity
+    const c = paint.color
+    if (!fx) {
+      batch.setColorRGBA(c.r, c.g, c.b, c.a * o)
+      this.glyphPass(layout, x, y, paint, 0, 0, 0, 0, true)
+      batch.setColorRGBA(pr, pg, pb, pa)
+      return
+    }
+
+    const { drawFont, fontSize } = paint
+    const sdf = drawFont.data.strokeMaxWidth > 0
+    const R = drawFont.data.strokeMaxWidth / 2 + 1 // distance range in baked texels
+    const texPerPx = drawFont.size / fontSize
+    const maxRho = drawFont.data.strokeMaxWidth / 2
+
+    let rho = 0
+    if (fx.strokeWidth > 0 && fx.strokeColor.a > 0) {
+      if (!sdf) {
+        warnOnce(`no-stroke-channel-${drawFont.data.family}`, `text stroke requested but font "${drawFont.data.family}" has no stroke channel (bake it with three-2d-font --stroke); stroke ignored`)
+      } else {
+        rho = (fx.strokeWidth / 2) * texPerPx
+        if (rho > maxRho + 0.01) {
+          warnOnce(
+            `stroke-clamp-${drawFont.data.family}-${drawFont.size}`,
+            `text stroke ${fx.strokeWidth}px exceeds what font "${drawFont.data.family}" ${drawFont.size}px was baked for (${((maxRho * 2) / texPerPx).toFixed(1)}px at this size); clamped`,
+          )
+          rho = maxRho
+        }
+      }
+    }
+    const hasStroke = rho > 0
+
+    // shadows first (last listed = lowest), each a copy of the glyphs through the distance channel (blur = threshold softness)
+    for (let i = fx.shadows.length - 1; i >= 0; i--) {
+      const s = fx.shadows[i]!
+      if (s.color.a <= 0) continue
+      batch.setColorRGBA(s.color.r, s.color.g, s.color.b, s.color.a * o)
+      if (sdf) {
+        const blurTexels = Math.min(s.blur * texPerPx, 2 * R)
+        const edge = 0.5 - (hasStroke ? rho : 0) / (2 * R)
+        this.glyphPass(layout, x + s.offsetX, y + s.offsetY, paint, 1, edge, blurTexels / (2 * R), 9, false)
+      } else {
+        this.glyphPass(layout, x + s.offsetX, y + s.offsetY, paint, 0, 0, 0, 0, false)
+      }
+    }
+
+    const sc = fx.strokeColor
+    if (hasStroke && fx.strokeUnder) {
+      batch.setColorRGBA(sc.r, sc.g, sc.b, sc.a * o)
+      this.glyphPass(layout, x, y, paint, 1, 0.5 - rho / (2 * R), 0, 9, false)
+    }
+    batch.setColorRGBA(c.r, c.g, c.b, c.a * o)
+    this.glyphPass(layout, x, y, paint, 0, 0, 0, 0, true)
+    if (hasStroke && !fx.strokeUnder) {
+      batch.setColorRGBA(sc.r, sc.g, sc.b, sc.a * o)
+      this.glyphPass(layout, x, y, paint, 1, 0.5 - rho / (2 * R), 0, 0.5 + rho / (2 * R), false)
+    }
+    batch.setColorRGBA(pr, pg, pb, pa)
+  }
+
+  /**
+   * One pass over the glyph quads with the batch tint: `effect` 0 = coverage fill, 1 = distance-channel effect
+   * (`threshold` / `softness` / `inner` in channel units). Same-size fonts take the fast path.
+   */
+  private glyphPass(layout: GlyphLayout, x: number, y: number, paint: TextPaint, effect: 0 | 1, threshold: number, softness: number, inner: number, count: boolean): void {
+    const batch = this.batch
+    const n = layout.glyphs.length
     const { layoutFont, drawFont, fontSize } = paint
+    const tex = drawFont.texture
     if (layoutFont === drawFont) {
-      drawFont.draw(batch, layout, x, y)
+      const { glyphs, quads } = layout
+      for (let i = 0; i < n; i++) {
+        const g = glyphs[i]!
+        const w = quads[i * 4 + 2]!
+        if (w <= 0 || g.width === 0) continue
+        if (effect === 0) batch.drawGlyph(tex, x + quads[i * 4]!, y + quads[i * 4 + 1]!, w, quads[i * 4 + 3]!, g.u, g.v, g.u2, g.v2)
+        else batch.drawGlyphEffect(tex, x + quads[i * 4]!, y + quads[i * 4 + 1]!, w, quads[i * 4 + 3]!, g.u, g.v, g.u2, g.v2, threshold, softness, inner)
+      }
     } else {
       // Same face baked at another size: keep the canonical layout positions, swap in the draw font's bitmaps.
       const sc = fontSize / layoutFont.size
       const sd = fontSize / drawFont.size
       const lAscent = layoutFont.data.ascent
       const dAscent = drawFont.data.ascent
-      const tex = drawFont.texture
       const { glyphs, quads } = layout
       for (let i = 0; i < n; i++) {
         const cg = glyphs[i]!
@@ -136,11 +251,11 @@ export class BatchDrawContext implements UIDrawContext {
         const lineTop = qy - cg.yOffset * sc
         const gx = qx - cg.xOffset * sc + dg.xOffset * sd
         const gy = lineTop + lAscent * sc - (dAscent - dg.yOffset) * sd
-        batch.drawUV(tex, x + gx, y + gy, dg.width * sd, dg.height * sd, dg.u, dg.v, dg.u2, dg.v2)
+        if (effect === 0) batch.drawGlyph(tex, x + gx, y + gy, dg.width * sd, dg.height * sd, dg.u, dg.v, dg.u2, dg.v2)
+        else batch.drawGlyphEffect(tex, x + gx, y + gy, dg.width * sd, dg.height * sd, dg.u, dg.v, dg.u2, dg.v2, threshold, softness, inner)
       }
-      batch.stats.glyphs += n
     }
-    batch.setColorRGBA(pr, pg, pb, pa)
+    if (count) batch.stats.glyphs += n
   }
 
   pushClip(rect: Rect): void {

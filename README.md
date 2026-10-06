@@ -31,6 +31,7 @@ bun run dev            # all example sites in parallel
 | Example | Port | What it shows |
 | --- | --- | --- |
 | [`three-ui-tailwind-vite`](examples/three-ui-tailwind-vite) | 5174 | **Flagship showcase**: React + Tailwind v4 — layout lab, typography, interaction states, scrolling, images/effects, counters & stress test, dark mode, responsive sidebar. |
+| [`three-ui-game-ui`](examples/three-ui-game-ui) | 5175 | **Game UI**: framed panels, gradients, shadows/rings, outlined text, hover/press transitions, `@keyframes`, floating damage numbers, a modal over a busy 3D scene with backdrop blur, and a stress mode (`?stress=2000`) that prints draw calls + frame time. |
 | [`three-ui-react-vite`](examples/three-ui-react-vite) | 5173 | React with style objects: state → mutation, keyed lists, event propagation, big lists. |
 | [`three-ui-basic`](examples/three-ui-basic) | 5172 | The plain (non-React) API: layout, text inheritance, images, clipping, ScrollView, theme toggle. |
 | [`three-2d-basic`](examples/three-2d-basic) | 5171 | 20 000-sprite batches, atlas, animation, particles, nine-patch, polygons, blend modes, viewports. |
@@ -68,7 +69,7 @@ renderer.setAnimationLoop(() => { ui.update(1 / 60); ui.render() })   // the app
 
 ```
 packages/  three-2d · three-2d-font · three-ui · three-ui-react · three-ui-tailwind
-examples/  five example apps (+ shared helpers)
+examples/  six example apps (+ shared helpers)
 scripts/   export / boundary checks · pack smoke test · publish · Yoga asm.js generator · font baker
 test/      fixtures (layout goldens, Inter fonts + baked atlases) · clean-room package consumer
 ```

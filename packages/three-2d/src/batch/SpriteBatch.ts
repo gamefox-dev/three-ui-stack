@@ -24,15 +24,31 @@ import type { BlendMode, ColorLike, Disposable, FlushReason, Rect } from '../typ
 import { RenderStats } from '../types'
 import type { MeshBasicNodeMaterial } from 'three/webgpu'
 import {
+  BACKDROP_ENTRY,
+  BOX_ENTRY_BASE,
   BatchMaterialCache,
+  MAX_GRADIENT_STOPS,
+  MODE_BACKDROP,
+  MODE_BOX,
+  MODE_GLYPH,
+  MODE_GLYPH_EFFECT,
+  MODE_SHADOW_INSET,
+  MODE_SHADOW_OUTER,
+  MODE_SOLID,
+  MODE_SPRITE,
   OFFSET_BORDER,
   OFFSET_COLOR,
+  OFFSET_DATA,
   OFFSET_LOCAL,
   OFFSET_MODE,
   OFFSET_SHAPE,
   OFFSET_UV,
+  SHADOW_ENTRY,
   VERTEX_STRIDE,
 } from './BatchMaterial'
+import { BackdropBlur, type BackdropQuality, type BackdropRenderer } from './BackdropBlur'
+import { BoxTable } from './BoxTable'
+import { normalizeRadii, srgbToOklab, type BoxGradient, type Radii4, type Sides4 } from './boxGeometry'
 
 /** Structural subset of a Three `WebGPURenderer` the batch needs. The batch never creates or owns a renderer. */
 export interface BatchRenderer {
@@ -52,6 +68,12 @@ export interface BatchOptions {
   maxSprites?: number
   /** Convert sRGB vertex colors to linear in the shader (default true). */
   srgbVertexColors?: boolean
+  /**
+   * `backdrop-filter: blur()` support: `'off'` (default for a bare batch), `'low'` (one small blur) or `'full'` (small +
+   * large blur). Needs `renderer` to expose `copyFramebufferToTexture` (a Three `WebGPURenderer` does). Decided at
+   * construction: it adds three texture bindings to the batch material.
+   */
+  backdrop?: BackdropQuality
 }
 
 export interface BatchDrawOptions {
@@ -72,6 +94,8 @@ export interface BatchDrawOptions {
   radius?: number
   borderWidth?: number
   borderColor?: ColorLike
+  /** Paint the region's alpha silhouette in `color` (RGB of the texture ignored): drop shadows, glows. */
+  silhouette?: boolean
 }
 
 export interface ShapeOptions {
@@ -88,12 +112,87 @@ export interface BatchSegment {
   clip: ClipRect | null
   indexStart: number
   indexCount: number
+  /** Bit mask (`1 << level`) of the backdrop sources quads in this segment sample; they are prepared before it renders. */
+  backdrop: number
+  /** Capture generation those backdrop quads belong to. */
+  backdropEpoch: number
+  /** Only texture-free quads (boxes, shadows, solids) so far: the first textured quad may adopt the segment instead of splitting it. */
+  loose: boolean
+  /** Bounds of everything painted into the segment (world space, no anti-aliasing margin). A clip that contains them clips nothing. */
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
 }
 
 /** World-space axis-aligned clip rectangle (after the transform stack at push time). */
 export interface ClipRect extends Rect {}
 
+export interface BoxOptions {
+  /** Border box in batch units. */
+  x: number
+  y: number
+  width: number
+  height: number
+  /** Corner radii (TL, TR, BR, BL). Scaled down together when adjacent corners overlap, like CSS. */
+  radii?: Radii4
+  /** Border widths (top, right, bottom, left). The border is painted over the background. */
+  borderWidths?: Sides4
+  borderColor?: ColorLike
+  /** Background color, painted under the gradient. */
+  background?: ColorLike
+  /** Up to {@link MAX_GRADIENT_STOPS} stops; interpolated premultiplied in sRGB space like CSS. */
+  gradient?: BoxGradient
+  /** Multiplies the alpha of everything the box paints (default 1). */
+  opacity?: number
+}
+
+export interface BackdropOptions {
+  /** Border box of the blurred region (batch units). */
+  x: number
+  y: number
+  width: number
+  height: number
+  radii?: Radii4
+  /** Blur radius in px (0 = no blur; the region is still brightness / saturation adjusted). */
+  blur: number
+  /** 1 = unchanged. */
+  brightness?: number
+  saturate?: number
+  opacity?: number
+}
+
+export interface BoxShadowOptions {
+  /** Border box of the element that casts the shadow. */
+  x: number
+  y: number
+  width: number
+  height: number
+  radii?: Radii4
+  /** Needed for inset shadows: the shadow is clipped to the padding box. */
+  borderWidths?: Sides4
+  offsetX?: number
+  offsetY?: number
+  /** CSS blur radius (the Gaussian's standard deviation is half of it). */
+  blur?: number
+  spread?: number
+  color: ColorLike
+  inset?: boolean
+  opacity?: number
+}
+
+/** Extra pixels around a box quad so edge anti-aliasing extends symmetrically outside the border box. */
+const QUAD_MARGIN = 1
+
+/** Value equality of two clip rectangles (identity is not enough: every `pushClip` allocates a new one). */
+function sameClip(a: ClipRect | null, b: ClipRect | null): boolean {
+  return a === b || (a !== null && b !== null && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height)
+}
+
 const DEFAULT_MAX_SPRITES = 4096
+/** Resolution of the "painted since the last backdrop capture" bitmap. */
+const DIRTY_COLS = 24
+const DIRTY_ROWS = 16
 
 export class SpriteBatch implements Disposable {
   readonly stats = new RenderStats()
@@ -143,8 +242,26 @@ export class SpriteBatch implements Disposable {
   private whiteTexture: DataTexture | null = null
   private whiteRegionCache: TextureRegion | null = null
 
-  /** 1 while writing solid fills (see `fillRect`). */
-  private solid = 0
+  /** Shader mode written into every vertex (see the `MODE_*` constants) and whether the quad ignores its texture. */
+  private mode = MODE_SPRITE
+  private texFree = false
+  /** Box-table entry index written into every vertex while drawing table-driven quads. */
+  private dataIndex = 0
+  /** Per-frame float table read by box / shadow / backdrop quads. */
+  readonly table = new BoxTable()
+  /** Backdrop blur pipeline (null when disabled / unsupported). */
+  readonly backdrop: BackdropBlur | null
+  private backdropRequested = 0
+  /** Capture generation counter for this frame (0 = nothing captured yet). */
+  private backdropEpoch = 0
+  /** Coarse bitmap of screen cells painted since the last capture (see `fillBackdrop`). */
+  private readonly dirtyCells = new Uint8Array(DIRTY_COLS * DIRTY_ROWS)
+  private dirtyX0 = 0
+  private dirtyY0 = 0
+  private dirtyCellW = 1
+  private dirtyCellH = 1
+  private dirtyTracking = false
+  private pendingBackdropBits = 0
   private readonly tmpColor = new Color4()
   private readonly tmpBorder = new Color4()
   private readonly tmpVec4 = new Vector4()
@@ -161,7 +278,10 @@ export class SpriteBatch implements Disposable {
     this.indices = new Uint32Array(maxSprites * 6)
     this.interleaved = new InterleavedBuffer(this.vertices, VERTEX_STRIDE).setUsage(DynamicDrawUsage)
     this.indexAttribute = new BufferAttribute(this.indices, 1).setUsage(DynamicDrawUsage)
-    this.materials = new BatchMaterialCache({ srgbVertexColors: options.srgbVertexColors ?? true })
+    const wantsBackdrop = options.backdrop !== undefined && options.backdrop !== 'off' && options.renderer !== undefined
+    const rendererWithCopy = options.renderer as unknown as Partial<BackdropRenderer> | undefined
+    this.backdrop = wantsBackdrop && typeof rendererWithCopy?.copyFramebufferToTexture === 'function' ? new BackdropBlur(options.renderer as unknown as BackdropRenderer, options.backdrop as 'low' | 'full') : null
+    this.materials = new BatchMaterialCache({ srgbVertexColors: options.srgbVertexColors ?? true, table: this.table, backdrop: this.backdrop ?? undefined })
     this.scene.matrixAutoUpdate = false
   }
 
@@ -302,6 +422,12 @@ export class SpriteBatch implements Disposable {
     this.indexCount = 0
     this.segmentCount = 0
     this.segments.length = 0
+    this.table.reset()
+    this.backdrop?.beginFrame()
+    this.backdropRequested = 0
+    this.backdropEpoch = 0
+    this.pendingBackdropBits = 0
+    this.setupDirtyGrid(this.camera)
     this.clipPoolIndex = 0
     this.clipStack.length = 0
     this.currentClip = null
@@ -318,6 +444,10 @@ export class SpriteBatch implements Disposable {
       warnOnce('unbalanced-clip', 'end() called with unbalanced pushClip()/popClip()')
     }
     this.submit('end')
+    if (this.backdrop) {
+      this.stats.backdropPasses = this.backdrop.passCount
+      this.stats.backdropCopies = this.backdrop.copyCount
+    }
     this._begun = false
   }
 
@@ -355,6 +485,17 @@ export class SpriteBatch implements Disposable {
     // a radius larger than half the shorter side (e.g. Tailwind's rounded-full = 9999) is clamped to a pill/circle
     const radius = Math.min(o.radius ?? 0, Math.abs(w * (o.scaleX ?? 1)) / 2, Math.abs(h * (o.scaleY ?? 1)) / 2)
     const shaped = radius > 0 || bw > 0
+    if (o.silhouette) this.mode = MODE_GLYPH
+    try {
+      this.drawExShape(region, o, u, v, u2, v2, c, bc, radius, bw, shaped)
+    } finally {
+      if (o.silhouette) this.mode = MODE_SPRITE
+    }
+  }
+
+  private drawExShape(region: TextureRegion, o: BatchDrawOptions, u: number, v: number, u2: number, v2: number, c: Color4, bc: Color4, radius: number, bw: number, shaped: boolean): void {
+    const w = o.width
+    const h = o.height
     const sx = o.scaleX ?? 1
     const sy = o.scaleY ?? 1
     const rot = o.rotation ?? 0
@@ -392,11 +533,13 @@ export class SpriteBatch implements Disposable {
   /** Solid (optionally rounded / bordered) rectangle using the batch's white pixel. */
   fillRect(x: number, y: number, width: number, height: number, options?: ShapeOptions): void {
     const white = this.whiteRegion
-    this.solid = 1
+    this.mode = MODE_SOLID
+    this.texFree = true
     try {
       this.fillRectSolid(white, x, y, width, height, options)
     } finally {
-      this.solid = 0
+      this.mode = MODE_SPRITE
+      this.texFree = false
     }
   }
 
@@ -412,6 +555,375 @@ export class SpriteBatch implements Disposable {
     const radius = Math.min(options.radius ?? 0, Math.abs(width) / 2, Math.abs(height) / 2)
     const shaped = radius > 0 || bw > 0
     this.writeRect(white.texture, x, y, width, height, 0, 0, 1, 1, c.r, c.g, c.b, c.a, shaped ? width / 2 : 0, shaped ? height / 2 : 0, radius, bw, bc.r, bc.g, bc.b, bc.a)
+  }
+
+  // ───────────────────────────── boxes, shadows, glyph effects ─────────────────────────────
+
+  /**
+   * Paint a box with the SDF box shader: per-corner radii, per-side border, background color and an optional
+   * linear / radial gradient. One quad; boxes join any texture segment, so they never break batching.
+   */
+  fillBox(o: BoxOptions): void {
+    const w = o.width
+    const h = o.height
+    if (!(w > 0) || !(h > 0)) return
+    const bg = o.background !== undefined ? parseColor(o.background, this.tmpColor) : this.tmpColor.set(0, 0, 0, 0)
+    const bgR = bg.r
+    const bgG = bg.g
+    const bgB = bg.b
+    const bgA = bg.a
+    const bws = o.borderWidths
+    const hasBorder = bws !== undefined && (bws[0] > 0 || bws[1] > 0 || bws[2] > 0 || bws[3] > 0) && o.borderColor !== undefined
+    const bc = hasBorder ? parseColor(o.borderColor!, this.tmpBorder) : this.tmpBorder.set(0, 0, 0, 0)
+    if (hasBorder && bc.a <= 0) {
+      // an invisible border still takes its space, but paints nothing
+    }
+    const grad = o.gradient
+    let n = grad ? Math.min(grad.stops.length, MAX_GRADIENT_STOPS) : 0
+    if (grad && grad.stops.length > MAX_GRADIENT_STOPS) warnOnce('gradient-stops', `gradients support at most ${MAX_GRADIENT_STOPS} color stops; extra stops are dropped`)
+    if (n < 2) n = 0
+    if (bgA <= 0 && !hasBorder && n === 0) return
+    const rad = normalizeRadii(o.radii, w, h, this.tmpRadii)
+    const table = this.table
+    const base = table.alloc(BOX_ENTRY_BASE + (n > 0 ? n + Math.ceil(n / 4) : 0))
+    const d = table.data
+    let i = base * 4
+    d[i++] = w / 2
+    d[i++] = h / 2
+    const oklab = n > 0 && grad!.colorSpace === 'oklab'
+    // kind: 0 none, 1 linear, 2 radial; +2 = interpolate in OKLab
+    d[i++] = n === 0 ? 0 : (grad!.type === 'linear' ? 1 : 2) + (oklab ? 2 : 0)
+    d[i++] = n
+    d[i++] = rad[0]
+    d[i++] = rad[1]
+    d[i++] = rad[2]
+    d[i++] = rad[3]
+    d[i++] = hasBorder ? bws![0] : 0
+    d[i++] = hasBorder ? bws![1] : 0
+    d[i++] = hasBorder ? bws![2] : 0
+    d[i++] = hasBorder ? bws![3] : 0
+    d[i++] = bc.r
+    d[i++] = bc.g
+    d[i++] = bc.b
+    d[i++] = bc.a
+    d[i++] = bgR
+    d[i++] = bgG
+    d[i++] = bgB
+    d[i++] = bgA
+    if (n > 0 && grad) {
+      if (grad.type === 'linear') {
+        const len = Math.max(grad.length, 1e-3)
+        d[i++] = grad.dx / len
+        d[i++] = grad.dy / len
+        d[i++] = 0
+        d[i++] = 0
+      } else {
+        d[i++] = grad.cx
+        d[i++] = grad.cy
+        d[i++] = 1 / Math.max(grad.rx, 1e-3)
+        d[i++] = 1 / Math.max(grad.ry, 1e-3)
+      }
+      // premultiplied stop colors, then the positions packed four per texel
+      let last = 0
+      for (let k = 0; k < n; k++) {
+        const c = parseColor(grad.stops[k]!.color, this.tmpColor)
+        if (oklab) {
+          const lab = srgbToOklab(c.r, c.g, c.b, this.tmpLab)
+          d[i++] = lab[0] * c.a
+          d[i++] = lab[1] * c.a
+          d[i++] = lab[2] * c.a
+        } else {
+          d[i++] = c.r * c.a
+          d[i++] = c.g * c.a
+          d[i++] = c.b * c.a
+        }
+        d[i++] = c.a
+      }
+      for (let k = 0; k < Math.ceil(n / 4) * 4; k++) {
+        if (k < n) last = Math.max(last, grad.stops[k]!.position)
+        d[i++] = last
+      }
+    } else {
+      d[i++] = 0
+      d[i++] = 0
+      d[i++] = 0
+      d[i++] = 0
+    }
+    this.writeShapeQuad(MODE_BOX, o.x + w / 2, o.y + h / 2, w / 2 + QUAD_MARGIN, h / 2 + QUAD_MARGIN, base, o.opacity ?? 1)
+    this.stats.boxes++
+  }
+
+  /**
+   * Analytic blurred box-shadow of a rounded rectangle (outer or inset). One quad and six table texels per layer —
+   * no offscreen pass, no blur kernel taps beyond four Gaussian-weighted rows.
+   */
+  fillShadow(o: BoxShadowOptions): void {
+    const w = o.width
+    const h = o.height
+    if (!(w > 0) || !(h > 0)) return
+    const col = parseColor(o.color, this.tmpColor)
+    if (col.a <= 0) return
+    const hw = w / 2
+    const hh = h / 2
+    const rad = normalizeRadii(o.radii, w, h, this.tmpRadii)
+    const sigma = Math.max(0, o.blur ?? 0) / 2
+    const spread = o.spread ?? 0
+    const ox = o.offsetX ?? 0
+    const oy = o.offsetY ?? 0
+    const table = this.table
+    const base = table.alloc(SHADOW_ENTRY)
+    const d = table.data
+    let i = base * 4
+    let qx: number
+    let qy: number
+    if (!o.inset) {
+      const shw = Math.max(0, hw + spread)
+      const shh = Math.max(0, hh + spread)
+      d[i++] = hw
+      d[i++] = hh
+      d[i++] = 0
+      d[i++] = 0
+      d[i++] = rad[0]
+      d[i++] = rad[1]
+      d[i++] = rad[2]
+      d[i++] = rad[3]
+      d[i++] = shw
+      d[i++] = shh
+      d[i++] = sigma
+      d[i++] = 0
+      for (let k = 0; k < 4; k++) d[i++] = rad[k]! > 0 ? Math.max(0, rad[k]! + spread) : 0
+      d[i++] = col.r
+      d[i++] = col.g
+      d[i++] = col.b
+      d[i++] = col.a
+      d[i++] = ox
+      d[i++] = oy
+      d[i++] = 0
+      d[i++] = 0
+      qx = Math.max(hw, Math.abs(ox) + shw + 3 * sigma) + QUAD_MARGIN
+      qy = Math.max(hh, Math.abs(oy) + shh + 3 * sigma) + QUAD_MARGIN
+    } else {
+      const b = o.borderWidths
+      const bT = b ? b[0] : 0
+      const bR = b ? b[1] : 0
+      const bB = b ? b[2] : 0
+      const bL = b ? b[3] : 0
+      const ihw = Math.max(0, hw - (bL + bR) / 2)
+      const ihh = Math.max(0, hh - (bT + bB) / 2)
+      const icx = (bL - bR) / 2
+      const icy = (bT - bB) / 2
+      const ir0 = Math.max(0, rad[0] - Math.max(bL, bT))
+      const ir1 = Math.max(0, rad[1] - Math.max(bR, bT))
+      const ir2 = Math.max(0, rad[2] - Math.max(bR, bB))
+      const ir3 = Math.max(0, rad[3] - Math.max(bL, bB))
+      d[i++] = ihw
+      d[i++] = ihh
+      d[i++] = icx
+      d[i++] = icy
+      d[i++] = ir0
+      d[i++] = ir1
+      d[i++] = ir2
+      d[i++] = ir3
+      d[i++] = Math.max(0, ihw - spread)
+      d[i++] = Math.max(0, ihh - spread)
+      d[i++] = sigma
+      d[i++] = 0
+      d[i++] = Math.max(0, ir0 - spread)
+      d[i++] = Math.max(0, ir1 - spread)
+      d[i++] = Math.max(0, ir2 - spread)
+      d[i++] = Math.max(0, ir3 - spread)
+      d[i++] = col.r
+      d[i++] = col.g
+      d[i++] = col.b
+      d[i++] = col.a
+      d[i++] = icx + ox
+      d[i++] = icy + oy
+      d[i++] = 0
+      d[i++] = 0
+      qx = hw + QUAD_MARGIN
+      qy = hh + QUAD_MARGIN
+    }
+    this.writeShapeQuad(o.inset ? MODE_SHADOW_INSET : MODE_SHADOW_OUTER, o.x + hw, o.y + hh, qx, qy, base, o.opacity ?? 1)
+    this.stats.shadows++
+  }
+
+  /**
+   * Blurred backdrop of the pixels behind a rounded rect (`backdrop-filter`). One quad + two table texels; the blur itself is
+   * shared (see {@link BackdropBlur}). Returns false when backdrop blur is off — the caller then just paints its own (translucent)
+   * background. The first backdrop quad of a frame starts a new draw call so the framebuffer copy sees everything drawn before it.
+   */
+  fillBackdrop(o: BackdropOptions): boolean {
+    const blur = this.backdrop
+    const camera = this.camera
+    if (!blur || !camera) return false
+    const w = o.width
+    const h = o.height
+    if (!(w > 0) || !(h > 0)) return false
+    const level = blur.levelFor(o.blur)
+    const bit = 1 << level
+    // One copy serves every blurred element — until one overlaps UI painted after that copy: it would blur (and cover) a stale
+    // picture, so a new capture generation starts. Blurred panels over the game scene always share generation 1.
+    if (this.backdropEpoch === 0 || this.isDirty(o.x - QUAD_MARGIN, o.y - QUAD_MARGIN, o.x + w + QUAD_MARGIN, o.y + h + QUAD_MARGIN)) {
+      this.backdropEpoch++
+      this.backdropRequested = 0
+      this.dirtyCells.fill(0)
+    }
+    if (!(this.backdropRequested & bit)) {
+      this.backdropRequested |= bit
+      this.pendingBackdropBits |= bit
+    }
+    const rad = normalizeRadii(o.radii, w, h, this.tmpRadii)
+    const base = this.table.alloc(BACKDROP_ENTRY)
+    const d = this.table.data
+    let i = base * 4
+    d[i++] = w / 2
+    d[i++] = h / 2
+    d[i++] = o.brightness ?? 1
+    d[i++] = o.saturate ?? 1
+    d[i++] = rad[0]
+    d[i++] = rad[1]
+    d[i++] = rad[2]
+    d[i++] = rad[3]
+
+    this.assertBegun('fillBackdrop')
+    this.reserve(4, 6)
+    this.mode = MODE_BACKDROP
+    this.texFree = true
+    const seg = this.useState(this.whiteRegion.texture)
+    seg.backdrop |= bit
+    const m = QUAD_MARGIN
+    const cx = o.x + w / 2
+    const cy = o.y + h / 2
+    const hw = w / 2 + m
+    const hh = h / 2 + m
+    const t = this.transform
+    const f = this.vertices
+    const alpha = o.opacity ?? 1
+    const v = this.tmpV3
+    let vi = this.vertexCount * VERTEX_STRIDE
+    const baseIndex = this.vertexCount
+    // corners TL TR BR BL; the uv attribute carries the *screen* position of each (transformed) corner
+    for (let k = 0; k < 4; k++) {
+      const sx = k === 1 || k === 2 ? 1 : -1
+      const sy = k >= 2 ? 1 : -1
+      let x = cx + sx * hw
+      let y = cy + sy * hh
+      if (!t.isIdentity()) {
+        const tx = t.applyX(x, y)
+        y = t.applyY(x, y)
+        x = tx
+      }
+      this.bdX[k] = x
+      this.bdY[k] = y
+      v.set(x, y, 0).project(camera)
+      this.dataIndex = base
+      vi = this.vertex(f, vi, x, y, (v.x + 1) / 2, (v.y + 1) / 2, 1, 1, 1, alpha, sx * hw, sy * hh, level, 0, 0, 0, 0, 0, 0, 0)
+    }
+    const idx = this.indices
+    let kk = this.indexCount
+    idx[kk++] = baseIndex
+    idx[kk++] = baseIndex + 1
+    idx[kk++] = baseIndex + 2
+    idx[kk++] = baseIndex + 2
+    idx[kk++] = baseIndex + 3
+    idx[kk++] = baseIndex
+    this.vertexCount += 4
+    this.indexCount = kk
+    seg.indexCount += 6
+    this.stats.sprites++
+    this.mode = MODE_SPRITE
+    this.texFree = false
+    this.dataIndex = 0
+    const bx0 = Math.min(this.bdX[0]!, this.bdX[1]!, this.bdX[2]!, this.bdX[3]!)
+    const by0 = Math.min(this.bdY[0]!, this.bdY[1]!, this.bdY[2]!, this.bdY[3]!)
+    const bx1 = Math.max(this.bdX[0]!, this.bdX[1]!, this.bdX[2]!, this.bdX[3]!)
+    const by1 = Math.max(this.bdY[0]!, this.bdY[1]!, this.bdY[2]!, this.bdY[3]!)
+    if (this.dirtyTracking) this.markDirty(bx0, by0, bx1, by1)
+    seg.minX = Math.min(seg.minX, bx0 + QUAD_MARGIN)
+    seg.minY = Math.min(seg.minY, by0 + QUAD_MARGIN)
+    seg.maxX = Math.max(seg.maxX, bx1 - QUAD_MARGIN)
+    seg.maxY = Math.max(seg.maxY, by1 - QUAD_MARGIN)
+    return true
+  }
+
+  /**
+   * Draw a glyph quad from the atlas' coverage channel (the atlas RGB is ignored, so fonts may carry
+   * extra channels). Uses the batch tint.
+   */
+  drawGlyph(texture: Texture, x: number, y: number, width: number, height: number, u: number, v: number, u2: number, v2: number): void {
+    const c = this._color
+    this.mode = MODE_GLYPH
+    this.writeRect(texture, x, y, width, height, u, v, u2, v2, c.r, c.g, c.b, c.a, 0, 0, 0, 0, 0, 0, 0, 0)
+    this.mode = MODE_SPRITE
+  }
+
+  /**
+   * Draw a glyph quad from the atlas' distance channel (R): coverage is where `distance >= threshold`, softened
+   * over `softness` (both in channel units, 0..1; `softness` 0 = one screen pixel). With `innerThreshold` ≤ 1 the
+   * result is the ring between the two thresholds (a centered stroke); pass 9 to disable it.
+   * Used for text outlines and text shadows; the batch tint is the effect color.
+   */
+  drawGlyphEffect(texture: Texture, x: number, y: number, width: number, height: number, u: number, v: number, u2: number, v2: number, threshold: number, softness: number, innerThreshold = 9): void {
+    const c = this._color
+    this.mode = MODE_GLYPH_EFFECT
+    this.writeRect(texture, x, y, width, height, u, v, u2, v2, c.r, c.g, c.b, c.a, threshold, softness, innerThreshold, 0, 0, 0, 0, 0)
+    this.mode = MODE_SPRITE
+  }
+
+  private readonly tmpRadii: [number, number, number, number] = [0, 0, 0, 0]
+  private readonly bdX = [0, 0, 0, 0]
+  private readonly effectiveClips: (ClipRect | null)[] = []
+  /** Anti-aliasing margin of the quad being written (excluded from segment bounds). */
+  private boundsInset = 0
+  private readonly bdY = [0, 0, 0, 0]
+  private readonly tmpLab: [number, number, number] = [0, 0, 0]
+
+  /** A quad centered on a box whose SDF origin is the quad center; its vertices carry a table-entry index. */
+  private writeShapeQuad(mode: number, cx: number, cy: number, hw: number, hh: number, data: number, alpha: number): void {
+    this.mode = mode
+    this.texFree = true
+    this.dataIndex = data
+    this.boundsInset = mode === MODE_SHADOW_OUTER ? 0 : QUAD_MARGIN
+    this.writeQuad(this.whiteRegion.texture, cx - hw, cy - hh, cx + hw, cy - hh, cx + hw, cy + hh, cx - hw, cy + hh, 0, 0, 1, 1, 1, 1, 1, alpha, hw, hh, 0, 0, 0, 0, 0, 0)
+    this.mode = MODE_SPRITE
+    this.texFree = false
+    this.dataIndex = 0
+    this.boundsInset = 0
+  }
+
+  // ───────────────────────────── backdrop dirty tracking ─────────────────────────────
+
+  /** Size the "painted since the last capture" grid to the camera's frustum (orthographic cameras only). */
+  private setupDirtyGrid(camera: Camera | null): void {
+    const c = camera as (Camera & { isOrthographicCamera?: boolean; left: number; right: number; top: number; bottom: number }) | null
+    this.dirtyTracking = this.backdrop !== null && c !== null && c.isOrthographicCamera === true
+    if (!this.dirtyTracking || !c) return
+    const x0 = Math.min(c.left, c.right)
+    const y0 = Math.min(c.top, c.bottom)
+    this.dirtyX0 = x0
+    this.dirtyY0 = y0
+    this.dirtyCellW = Math.max(1e-6, Math.abs(c.right - c.left) / DIRTY_COLS)
+    this.dirtyCellH = Math.max(1e-6, Math.abs(c.top - c.bottom) / DIRTY_ROWS)
+    this.dirtyCells.fill(0)
+  }
+
+  private markDirty(minX: number, minY: number, maxX: number, maxY: number): void {
+    const c0 = Math.max(0, Math.floor((minX - this.dirtyX0) / this.dirtyCellW))
+    const c1 = Math.min(DIRTY_COLS - 1, Math.floor((maxX - this.dirtyX0) / this.dirtyCellW))
+    const r0 = Math.max(0, Math.floor((minY - this.dirtyY0) / this.dirtyCellH))
+    const r1 = Math.min(DIRTY_ROWS - 1, Math.floor((maxY - this.dirtyY0) / this.dirtyCellH))
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) this.dirtyCells[r * DIRTY_COLS + c] = 1
+  }
+
+  /** Was anything painted into this rect since the last backdrop capture? (Conservative: cell granularity.) */
+  private isDirty(minX: number, minY: number, maxX: number, maxY: number): boolean {
+    if (!this.dirtyTracking) return true
+    const c0 = Math.max(0, Math.floor((minX - this.dirtyX0) / this.dirtyCellW))
+    const c1 = Math.min(DIRTY_COLS - 1, Math.floor((maxX - this.dirtyX0) / this.dirtyCellW))
+    const r0 = Math.max(0, Math.floor((minY - this.dirtyY0) / this.dirtyCellH))
+    const r1 = Math.min(DIRTY_ROWS - 1, Math.floor((maxY - this.dirtyY0) / this.dirtyCellH))
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (this.dirtyCells[r * DIRTY_COLS + c]) return true
+    return false
   }
 
   // ───────────────────────────── internals ─────────────────────────────
@@ -467,10 +979,23 @@ export class SpriteBatch implements Disposable {
     let seg = n > 0 ? this.segments[n - 1]! : undefined
     const blend = this._blend
     const clip = this.currentClip
-    // Solid fills ignore their texture, so they extend the current segment instead of forcing a texture switch.
-    if (seg && (seg.texture === tex || (this.solid === 1 && seg.indexCount > 0)) && seg.blend === blend && seg.clip === clip) return seg
+    const forceBreak = this.pendingBackdropBits !== 0
+    // Solid fills, boxes and shadows ignore their texture, so they extend the current segment instead of forcing a texture switch.
+    if (!forceBreak && seg && (seg.texture === tex || (this.texFree && seg.indexCount > 0)) && seg.blend === blend && seg.clip === clip) {
+      if (seg.loose && !this.texFree) {
+        seg.texture = tex
+        seg.loose = false
+      }
+      return seg
+    }
+    // a segment that so far holds only boxes / shadows can take the first real texture instead of forcing a draw-call split
+    if (!forceBreak && seg && seg.loose && !this.texFree && seg.indexCount > 0 && seg.blend === blend && seg.clip === clip) {
+      seg.texture = tex
+      seg.loose = false
+      return seg
+    }
     if (seg && seg.indexCount > 0) {
-      const reason: FlushReason = seg.texture !== tex ? 'texture' : seg.blend !== blend ? 'blend' : 'clip'
+      const reason: FlushReason = forceBreak ? 'backdrop' : seg.texture !== tex ? 'texture' : seg.blend !== blend ? 'blend' : 'clip'
       this.closeSegment(seg, reason)
       if (reason === 'texture') this.stats.textureSwitches++
       seg = undefined
@@ -479,10 +1004,15 @@ export class SpriteBatch implements Disposable {
       seg.texture = tex
       seg.blend = blend
       seg.clip = clip
+      seg.loose = this.texFree
+      seg.minX = seg.minY = Infinity
+      seg.maxX = seg.maxY = -Infinity
+      seg.backdrop |= this.takeBackdropBits()
+      seg.backdropEpoch = this.backdropEpoch
       return seg
     }
     seg = this.segmentPool[this.segmentCount]
-    if (!seg) this.segmentPool[this.segmentCount] = seg = { texture: null, blend: 'normal', clip: null, indexStart: 0, indexCount: 0 }
+    if (!seg) this.segmentPool[this.segmentCount] = seg = { texture: null, blend: 'normal', clip: null, indexStart: 0, indexCount: 0, backdrop: 0, backdropEpoch: 0, loose: false, minX: 0, minY: 0, maxX: 0, maxY: 0 }
     this.segments[this.segmentCount] = seg
     this.segmentCount++
     seg.texture = tex
@@ -490,7 +1020,18 @@ export class SpriteBatch implements Disposable {
     seg.clip = clip
     seg.indexStart = this.indexCount
     seg.indexCount = 0
+    seg.loose = this.texFree
+    seg.minX = seg.minY = Infinity
+    seg.maxX = seg.maxY = -Infinity
+    seg.backdrop = this.takeBackdropBits()
+    seg.backdropEpoch = this.backdropEpoch
     return seg
+  }
+
+  private takeBackdropBits(): number {
+    const bits = this.pendingBackdropBits
+    this.pendingBackdropBits = 0
+    return bits
   }
 
   private closeSegment(seg: BatchSegment, reason: FlushReason): void {
@@ -551,6 +1092,17 @@ export class SpriteBatch implements Disposable {
       x3 = tx3
       y3 = ty3
     }
+    const bx0 = Math.min(x0, x1, x2, x3)
+    const by0 = Math.min(y0, y1, y2, y3)
+    const bx1 = Math.max(x0, x1, x2, x3)
+    const by1 = Math.max(y0, y1, y2, y3)
+    if (this.dirtyTracking) this.markDirty(bx0, by0, bx1, by1)
+    // true bounds exclude the 1px anti-aliasing margin of box quads (`boundsInset`)
+    const inset = this.boundsInset
+    if (bx0 + inset < seg.minX) seg.minX = bx0 + inset
+    if (by0 + inset < seg.minY) seg.minY = by0 + inset
+    if (bx1 - inset > seg.maxX) seg.maxX = bx1 - inset
+    if (by1 - inset > seg.maxY) seg.maxY = by1 - inset
     const f = this.vertices
     let i = this.vertexCount * VERTEX_STRIDE
     const base = this.vertexCount
@@ -617,7 +1169,8 @@ export class SpriteBatch implements Disposable {
     f[i + OFFSET_BORDER + 1] = bg
     f[i + OFFSET_BORDER + 2] = bb
     f[i + OFFSET_BORDER + 3] = ba
-    f[i + OFFSET_MODE] = this.solid
+    f[i + OFFSET_MODE] = this.mode
+    f[i + OFFSET_DATA] = this.dataIndex
     return i + VERTEX_STRIDE
   }
 
@@ -629,6 +1182,10 @@ export class SpriteBatch implements Disposable {
     const seg = this.useState(tex)
     const t = this.transform
     const ident = t.isIdentity()
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
     const f = this.vertices
     const base = this.vertexCount
     let i = base * VERTEX_STRIDE
@@ -640,11 +1197,22 @@ export class SpriteBatch implements Disposable {
         y = t.applyY(x, y)
         x = tx
       }
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (y < minY) minY = y
+      if (y > maxY) maxY = y
       i = this.vertex(f, i, x, y, uvs[n * 2]!, uvs[n * 2 + 1]!, r, g, b, a, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     }
     const idx = this.indices
     let k = this.indexCount
     for (let n = 0; n < triangles.length; n++) idx[k++] = base + triangles[n]!
+    if (vn > 0) {
+      if (this.dirtyTracking) this.markDirty(minX, minY, maxX, maxY)
+      if (minX < seg.minX) seg.minX = minX
+      if (minY < seg.minY) seg.minY = minY
+      if (maxX > seg.maxX) seg.maxX = maxX
+      if (maxY > seg.maxY) seg.maxY = maxY
+    }
     this.vertexCount += vn
     this.indexCount = k
     seg.indexCount += triangles.length
@@ -673,6 +1241,7 @@ export class SpriteBatch implements Disposable {
       geometry.setAttribute('aShape', new InterleavedBufferAttribute(this.interleaved, 4, OFFSET_SHAPE))
       geometry.setAttribute('aBorder', new InterleavedBufferAttribute(this.interleaved, 4, OFFSET_BORDER))
       geometry.setAttribute('aMode', new InterleavedBufferAttribute(this.interleaved, 1, OFFSET_MODE))
+      geometry.setAttribute('aData', new InterleavedBufferAttribute(this.interleaved, 1, OFFSET_DATA))
       geometry.setIndex(this.indexAttribute)
       mesh = new Mesh(geometry, material)
       mesh.frustumCulled = false
@@ -701,6 +1270,7 @@ export class SpriteBatch implements Disposable {
     this.indexAttribute.clearUpdateRanges()
     this.indexAttribute.addUpdateRange(0, this.indexCount)
     this.indexAttribute.needsUpdate = true
+    this.table.upload()
 
     for (const mesh of this.meshes) mesh.visible = false
     this.meshCursor.clear()
@@ -722,6 +1292,7 @@ export class SpriteBatch implements Disposable {
       this.indexCount = 0
       this.segmentCount = 0
       this.segments.length = 0
+      this.table.reset()
     }
   }
 
@@ -734,10 +1305,31 @@ export class SpriteBatch implements Disposable {
     try {
       let i = 0
       const n = this.segmentCount
+      const blur = this.backdrop
+      const unprepared = (k: number): number => {
+        if (!blur) return 0
+        const seg = this.segments[k]!
+        let bits = seg.backdrop
+        if (bits === 0) return 0
+        for (let level = 0; level < 3; level++) if (blur.isPrepared(level, seg.backdropEpoch)) bits &= ~(1 << level)
+        return bits
+      }
+      // A scissor that contains everything its segment painted clips nothing: treat it as "no clip" so neighbouring
+      // segments merge into one render() call (each call costs ~1 ms of fixed renderer overhead)
+      const eff = this.effectiveClips
+      eff.length = n
+      for (let k = 0; k < n; k++) {
+        const seg = this.segments[k]!
+        const c = seg.clip
+        eff[k] = c && !(seg.minX >= c.x - 1e-3 && seg.minY >= c.y - 1e-3 && seg.maxX <= c.x + c.width + 1e-3 && seg.maxY <= c.y + c.height + 1e-3) ? c : null
+      }
       while (i < n) {
-        const clip = this.segments[i]!.clip
-        let j = i
-        while (j < n && this.segments[j]!.clip === clip) j++
+        const clip = eff[i]!
+        // the blur must be built from everything rendered so far: prepare right before the first segment that needs it
+        const need = unprepared(i)
+        if (need !== 0) blur!.prepare(need, this.segments[i]!.backdropEpoch)
+        let j = i + 1
+        while (j < n && sameClip(eff[j]!, clip) && unprepared(j) === 0) j++
         for (let k = i; k < j; k++) this.segMeshes[k]!.visible = true
         if (clip) {
           if (clip.width <= 0 || clip.height <= 0) {
@@ -797,6 +1389,8 @@ export class SpriteBatch implements Disposable {
     }
     this.meshes.length = 0
     this.materials.dispose()
+    this.table.dispose()
+    this.backdrop?.dispose()
     this.whiteTexture?.dispose()
     this.whiteTexture = null
     this.whiteRegionCache = null

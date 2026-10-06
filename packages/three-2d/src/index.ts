@@ -39,7 +39,14 @@ export {
   type BatchSegment,
   type ClipRect,
   type ShapeOptions,
+  type BoxOptions,
+  type BoxShadowOptions,
+  type BackdropOptions,
 } from './batch/SpriteBatch'
+export { BackdropBlur, LARGE_BLUR_RADIUS, type BackdropQuality, type BackdropRenderer } from './batch/BackdropBlur'
+export { normalizeRadii, srgbToOklab, type BoxGradient, type BoxGradientStop, type Radii4, type Sides4 } from './batch/boxGeometry'
+export { BoxTable } from './batch/BoxTable'
+export { MAX_GRADIENT_STOPS } from './batch/BatchMaterial'
 export { PolygonSpriteBatch, type PolygonOptions } from './batch/PolygonSpriteBatch'
 export { VERTEX_STRIDE } from './batch/BatchMaterial'
 

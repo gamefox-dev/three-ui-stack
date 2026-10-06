@@ -1,0 +1,27 @@
+{
+  "name": "example-three-ui-game-ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Game-style UI on three-ui + Tailwind v4: gradients, shadows, outlined text, animations, backdrop blur, and a batching stress mode.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "example-shared": "workspace:^",
+    "three": "catalog:",
+    "@implicit-invocation/three-2d": "workspace:^",
+    "@implicit-invocation/three-ui": "workspace:^",
+    "@implicit-invocation/three-ui-tailwind": "workspace:^"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "catalog:",
+    "@types/three": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

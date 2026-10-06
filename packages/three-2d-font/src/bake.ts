@@ -5,6 +5,7 @@ import {
   type BitmapGlyphJSON,
 } from '@implicit-invocation/three-2d'
 import { resolveCharacters, type CharsetName } from './charsets'
+import { encodeDistanceChannel } from './distance'
 import { AtlasPacker } from './pack/AtlasPacker'
 import { OpenTypeFontParser } from './parser'
 import { CpuGlyphRasterizer } from './rasterizer/CpuGlyphRasterizer'
@@ -30,6 +31,13 @@ export interface BakeOptions {
   parser?: FontParser
   /** Defaults to the portable CPU rasterizer; pass a `ThreeGlyphRasterizer` to bake on the GPU. */
   rasterizer?: GlyphRasterizer
+  /**
+   * Bake a second channel for text outlines and shadows: the red channel stores a signed distance field so any
+   * `-webkit-text-stroke` width up to `maxWidth` (CSS px at this font's `size`; scales with the display size) renders
+   * from the same atlas, and `text-shadow` blur is a cheap threshold. Glyph padding grows to hold the field.
+   * The atlas must then be loaded WITHOUT alpha premultiplication (the field lives in transparent texels).
+   */
+  stroke?: { maxWidth: number }
 }
 
 export interface BakedBitmapFont {
@@ -53,7 +61,10 @@ export async function bakeBitmapFont(data: ArrayBuffer, options: BakeOptions): P
   const rasterizer = options.rasterizer ?? new CpuGlyphRasterizer()
   const font = parser.parse(data)
   const size = options.size
-  const padding = options.padding ?? 2
+  const strokeMax = options.stroke?.maxWidth ?? 0
+  // distance range: half the widest stroke, plus a pixel of antialiasing margin
+  const range = strokeMax > 0 ? strokeMax / 2 + 1 : 0
+  const padding = Math.max(options.padding ?? 2, strokeMax > 0 ? Math.ceil(range) + 1 : 0)
   const spacing = options.spacing ?? 1
 
   const codePoints = resolveCharacters(options.characters)
@@ -92,12 +103,14 @@ export async function bakeBitmapFont(data: ArrayBuffer, options: BakeOptions): P
   for (const id of ids) {
     const g = byId.get(id)!
     const p = where.get(id)!
+    const field = range > 0 && g.width > 0 ? encodeDistanceChannel(g.alpha, g.width, g.height, range) : null
     for (let y = 0; y < g.height; y++) {
       for (let x = 0; x < g.width; x++) {
         const o = ((p.y + y) * packed.width + p.x + x) * 4
-        rgba[o] = 255
-        rgba[o + 1] = 255
-        rgba[o + 2] = 255
+        const dist = field ? field[y * g.width + x]! : 255
+        rgba[o] = dist
+        rgba[o + 1] = dist
+        rgba[o + 2] = dist
         rgba[o + 3] = g.alpha[y * g.width + x]!
       }
     }
@@ -132,6 +145,7 @@ export async function bakeBitmapFont(data: ArrayBuffer, options: BakeOptions): P
       padding,
       ...(options.imageName ? { image: options.imageName } : {}),
     },
+    ...(strokeMax > 0 ? { stroke: { maxWidth: strokeMax } } : {}),
     chars,
     glyphs,
     kerning,

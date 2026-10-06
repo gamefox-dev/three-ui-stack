@@ -19,9 +19,42 @@ export {
   DEP_COLOR_SCHEME,
   DEP_VIEWPORT,
   DEP_THEME,
+  DEP_MOTION,
 } from './core/flags'
 
-export type { Style, StyleProp, Length, NonAutoLength, TransformOp, FlexDirection, FlexWrap, AlignValue, JustifyValue, Overflow, FontWeight, TextAlign } from './style/types'
+export type {
+  Style,
+  StyleProp,
+  Length,
+  NonAutoLength,
+  TransformOp,
+  FlexDirection,
+  FlexWrap,
+  AlignValue,
+  JustifyValue,
+  Overflow,
+  FontWeight,
+  TextAlign,
+  Angle,
+  GradientLength,
+  GradientStop,
+  GradientCorner,
+  LinearGradient,
+  RadialGradient,
+  RadialSize,
+  BackgroundGradient,
+  BoxShadow,
+  TextShadow,
+  DropShadow,
+  Easing,
+  KeyframeStyle,
+  Keyframes,
+  AnimationDirection,
+  AnimationFill,
+  AnimationOptions,
+  AnimationSpec,
+  TransitionSpec,
+} from './style/types'
 export { INHERITED_KEYS } from './style/types'
 export {
   computeStyle,
@@ -32,7 +65,13 @@ export {
   LAYOUT_KEYS,
   PAINT_KEYS,
   TEXT_METRIC_KEYS,
+  valuesEqual,
   type ComputedStyle,
+  type ResolvedGradient,
+  type ResolvedGradientStop,
+  type ResolvedBoxShadow,
+  type ResolvedTextShadow,
+  type ResolvedTransition,
 } from './style/computed'
 
 export { createEnvironment, type UIEnvironment, type UIViewport } from './env'
@@ -44,6 +83,8 @@ export {
   UIWheelEvent,
   UIKeyEvent,
   UIFocusEvent,
+  UIAnimationEvent,
+  UITransitionEvent,
   StateFlags,
   type EventMap,
   type UIEventType,
@@ -54,8 +95,14 @@ export {
   type Modifiers,
 } from './input/events'
 export { InputManager } from './input/InputManager'
+export { AnimationEngine } from './anim/engine'
+export { UIAnimation, type AnimationPlayState } from './anim/Animation'
+export { parseEasingFn, cubicBezier, steps, type EasingFn } from './anim/easing'
+export { ANIMATABLE, PAINT_ANIMATABLE, LAYOUT_ANIMATABLE } from './anim/interpolate'
 
-export type { UIDrawContext, RectPaint, ImagePaint, NinePatchPaint, TextPaint } from './paint/DrawContext'
+export type { UIDrawContext, RectPaint, BoxPaint, ShadowPaint, ImagePaint, NinePatchPaint, TextPaint, TextEffects, BackdropPaint } from './paint/DrawContext'
+export { resolveGradientForBox, linearGeometry, radialGeometry, resolveStopPositions } from './paint/gradient'
+export { cornerRadii, borderWidths } from './core/paintBox'
 export { BatchDrawContext } from './paint/BatchDrawContext'
 
 export { FontRegistry, FontFace, type FontDescriptor } from './text/FontRegistry'

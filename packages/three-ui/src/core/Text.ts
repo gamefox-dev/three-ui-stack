@@ -79,6 +79,9 @@ export class Text extends UINode {
       letterSpacing: resolveEm(cs.letterSpacing, cs.fontSize) ?? 0,
       align: cs.textAlign === 'auto' ? 'left' : cs.textAlign,
       width: maxWidth,
+      ...(cs.whiteSpace === 'nowrap' ? { wrap: false } : {}),
+      ...(cs.numberOfLines ? { maxLines: cs.numberOfLines } : {}),
+      ...(cs.textOverflow === 'ellipsis' ? { ellipsis: true } : {}),
     })
     return { layout, face }
   }
@@ -104,11 +107,16 @@ export class Text extends UINode {
     const r = this.resolve(Math.max(0, w - inset.left - inset.right))
     if (!r) return
     const drawFont = r.face.pick(cs.fontSize * ui.environment.viewport.pixelRatio)
+    const stroke = cs.textStrokeWidth > 0
+    const shadows = cs.textShadow
     ctx.text(r.layout, x + inset.left, y + inset.top, {
       color: cs.color,
       layoutFont: r.face.canonical,
       drawFont,
       fontSize: cs.fontSize,
+      ...(stroke || shadows.length > 0
+        ? { effects: { strokeWidth: cs.textStrokeWidth, strokeColor: cs.textStrokeColor ?? cs.color, strokeUnder: cs.paintOrder === 'stroke', shadows } }
+        : {}),
     })
   }
 }

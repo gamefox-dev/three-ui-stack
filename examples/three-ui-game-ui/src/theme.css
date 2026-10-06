@@ -1,0 +1,41 @@
+@import "tailwindcss";
+@import "@implicit-invocation/three-ui-tailwind";
+
+/* CSS-first Tailwind v4 theme. Colors, spacing, fonts and @keyframes all compile to data at build time. */
+@theme {
+  --font-ui: Inter;
+  --font-display: "Inter Display";
+  --spacing: 4px;
+
+  --animate-pop: pop 260ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  --animate-shine: shine 1.8s linear infinite;
+  --animate-float: float 3s ease-in-out infinite;
+  --animate-glow: glow 1.6s ease-in-out infinite;
+
+  @keyframes pop {
+    0% { transform: scale(0.82); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes shine {
+    from { transform: translateX(-80px); }
+    to { transform: translateX(380px); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-6px); }
+  }
+  @keyframes glow {
+    0%, 100% { box-shadow: 0 0 6px 0 #fbbf2455; }
+    50% { box-shadow: 0 0 22px 5px #fbbf24aa; }
+  }
+}
+
+/* A custom utility: a true outline (stroke painted under the fill). Needs a font baked with a stroke channel. */
+@utility outlined {
+  -webkit-text-stroke: 6px #1c1008;
+  paint-order: stroke fill;
+}
+@utility outlined-thin {
+  -webkit-text-stroke: 4px #0f172a;
+  paint-order: stroke fill;
+}

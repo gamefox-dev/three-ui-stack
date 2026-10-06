@@ -20,7 +20,32 @@ A portable **2D / UI stack on Three.js**, running anywhere Three's WebGPU render
 | [`@implicit-invocation/three-ui-react`](packages/three-ui-react) | `react-reconciler` (mutation mode) renderer for `@implicit-invocation/three-ui`. |
 | [`@implicit-invocation/three-ui-tailwind`](packages/three-ui-tailwind) | Tailwind v4 classes → three-ui style data at build time (Vite + Metro). No runtime CSS parsing. |
 
-## Try it
+## Install
+
+The packages are published on npm under the `@implicit-invocation` scope. Everything needs `three` (`^0.186.1`) as a peer dependency.
+
+```bash
+# core: retained-mode UI + batched 2D (no React, no DOM required)
+bun add @implicit-invocation/three-ui @implicit-invocation/three-2d three
+
+# React renderer
+bun add @implicit-invocation/three-ui-react react
+
+# Tailwind v4 classes → style data at build time (Vite or Metro)
+bun add @implicit-invocation/three-ui-tailwind
+bun add -d tailwindcss @tailwindcss/node @tailwindcss/vite
+
+# TTF/OTF → bitmap-font atlas (library + `three-2d-font` CLI)
+bun add -d @implicit-invocation/three-2d-font
+```
+
+`npm i` / `pnpm add` / `yarn add` work the same. Each package README lists its own install line and peer dependencies. Fonts are baked bitmap atlases: see the [`three-2d-font` README](packages/three-2d-font) for the CLI.
+
+## Live examples
+
+**https://gamefox-dev.github.io/three-ui-stack/**: one site with navigation, every web example embedded and runnable (WebGPU, WebGL2 backend or classic `WebGLRenderer`). Built and deployed from `main` by [`.github/workflows/pages.yml`](.github/workflows/pages.yml); build it locally with `bun run build:pages` (output in `.pages/`).
+
+## Try it locally
 
 ```bash
 bun install
@@ -80,6 +105,7 @@ Commands (Bun is the workspace runner; libraries are built with **Vite library m
 bun run build:packages   # vite build + tsc declarations for every package
 bun run typecheck && bun run test
 bun run check            # typecheck + tests + build + export & boundary checks
+bun run build:pages      # example site (nav shell + every web example) into .pages/
 bun run pack:smoke       # bun pm pack → tarball manifest checks → clean-room install → import every entry
 bun run changeset        # release intent (publish is done by scripts/publish-packages.ts, never automatically)
 ```
@@ -90,6 +116,6 @@ No one-Three-object-per-UI-node · no React in `@implicit-invocation/three-ui` �
 
 ## Status & notes
 
-Everything is **alpha (0.x)**. Rendering was verified in headless Chrome on both the WebGPU and the WebGL2 backends; the React Native example is scaffolded but has not been run on a device from this repo's CI. See [CONTRIBUTING.md](CONTRIBUTING.md) for the release workflow and the npm name caveat (`@implicit-invocation/three-ui` is already taken on the public registry).
+Everything is **alpha (0.x)**. Rendering was verified in headless Chrome on both the WebGPU and the WebGL2 backends; the React Native example is scaffolded but has not been run on a device from this repo's CI. See [CONTRIBUTING.md](CONTRIBUTING.md) for the release workflow.
 
 MIT licensed. Yoga (MIT, Meta) is bundled in `@implicit-invocation/three-ui` — see its `THIRD_PARTY_NOTICES.md`. Example fonts: Inter (SIL OFL 1.1).

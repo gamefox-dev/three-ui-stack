@@ -12,12 +12,17 @@ export async function loadTexture(url: string, options: { mipmaps?: boolean; srg
   return configureTexture(texture, { mipmaps: options.mipmaps ?? false })
 }
 
-/** Load a bitmap font baked by `@implicit-invocation/three-2d-font` (`<name>.json` + `<name>.png`) from `/fonts`. */
+/** Resolve a public asset against the page URL, so examples also work when hosted under a sub-path (GitHub Pages). */
+export function assetUrl(path: string): string {
+  return new URL(path, document.baseURI).href
+}
+
+/** Load a bitmap font baked by `@implicit-invocation/three-2d-font` (`<name>.json` + `<name>.png`) from `fonts/`. */
 export async function loadBitmapFont(name: string): Promise<BitmapFont> {
   const [json, texture] = await Promise.all([
-    fetch(`/fonts/${name}.json`).then((r) => r.json()),
+    fetch(assetUrl(`fonts/${name}.json`)).then((r) => r.json()),
     // glyph atlases are white + coverage alpha: no color management, mipmaps help when scaled down
-    loadTexture(`/fonts/${name}.png`, { mipmaps: true, srgb: false }),
+    loadTexture(assetUrl(`fonts/${name}.png`), { mipmaps: true, srgb: false }),
   ])
   return new BitmapFont(BitmapFontData.parse(json), texture)
 }

@@ -48,10 +48,13 @@ fixtures in `test/fixtures/layouts`) and that the asm build initializes with the
 
 ### npm names
 
-Before the first publish verify availability of every name. At the time of writing `@implicit-invocation/three-2d`, `@implicit-invocation/three-2d-font`,
-`@implicit-invocation/three-ui-react` and `@implicit-invocation/three-ui-tailwind` are free but **`@implicit-invocation/three-ui` is already taken** on the public registry (a different,
-unrelated project). Package names are intentionally *not* renamed in the repo; resolve this (scope, rename or transfer)
-before publishing and document the decision here.
+The unscoped names are not ours (`three-ui` on the public registry belongs to another project), so every package is published under the `@implicit-invocation` scope: `@implicit-invocation/three-2d`, `three-2d-font`, `three-ui`, `three-ui-react`, `three-ui-tailwind`. Names are the same in the repo and on npm.
+
+## Example site (GitHub Pages)
+
+`bun run build:pages` (`scripts/build-pages.ts`) builds every web example with a relative base into `.pages/examples/<name>/` and copies `site/` (the navigation shell) on top. `.github/workflows/pages.yml` deploys `.pages/` with GitHub Pages' Actions source on every push to `main`, so no `gh-pages` branch exists. One-time setup: repo Settings → Pages → Source: **GitHub Actions**.
+
+Adding a web example: give it a `vite.config.ts` and add an entry to the `examples` array in `site/index.html` (the build fails if one is missing). Load public assets through `assetUrl()` from `example-shared`, never with a root-absolute `/path`, so the example works under the `/three-ui-stack/` sub-path.
 
 ## Browser verification
 

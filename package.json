@@ -39,6 +39,7 @@
     "dev:packages": "bun run --parallel --filter './packages/*' dev",
     "build": "bun run build:packages && bun run --filter './examples/*' build",
     "build:packages": "bun run --filter './packages/*' build",
+    "build:pages": "bun scripts/build-pages.ts",
     "typecheck": "bun run --filter './packages/*' --filter './examples/*' --if-present typecheck && tsc -p tsconfig.json",
     "test": "vitest --run",
     "test:watch": "vitest",

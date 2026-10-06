@@ -12,7 +12,7 @@ import {
 } from '@implicit-invocation/three-2d'
 import { packBitmapFont } from '@implicit-invocation/three-2d-font'
 import type { BitmapFont } from '@implicit-invocation/three-2d'
-import { FpsMeter, bootRenderer, loadBitmapFont, loop, makeGemAtlas, makeNinePatch, makeWalkCycle } from 'example-shared'
+import { FpsMeter, assetUrl, bootRenderer, loadBitmapFont, loop, makeGemAtlas, makeNinePatch, makeWalkCycle } from 'example-shared'
 
 const canvas = document.getElementById('c') as HTMLCanvasElement
 let graphics: Three2D | null = null
@@ -122,7 +122,7 @@ let packing = false
 async function packFonts(): Promise<void> {
   if (packing) return
   packing = true
-  const bytes = await (await fetch('/fonts/Inter_700Bold.ttf')).arrayBuffer()
+  const bytes = await (await fetch(assetUrl('fonts/Inter_700Bold.ttf'))).arrayBuffer()
   const options = { size: 40, characters: 'ascii' as const, supersample: 4, padding: 2 }
   let t = performance.now()
   const gpu = await packBitmapFont(bytes, { ...options, renderer: boot.renderer as never })

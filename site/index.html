@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>three-ui · live examples</title>
+    <meta name="description" content="Live examples for @implicit-invocation/three-2d and three-ui: a portable 2D / UI stack on Three.js." />
+    <style>
+      :root {
+        --bg: #050507;
+        --panel: #0c0c11;
+        --line: #1c1c26;
+        --text: #e7e7ee;
+        --muted: #8b8b9c;
+        --accent: #8b7bff;
+        color-scheme: dark;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+      body { font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; display: flex; }
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+      pre { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; margin: 8px 0 16px; }
+
+      nav { width: 260px; flex: none; border-right: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; overflow-y: auto; }
+      nav h1 { font-size: 15px; margin: 0; padding: 18px 18px 4px; }
+      nav .sub { padding: 0 18px 14px; color: var(--muted); font-size: 12px; }
+      nav h2 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 14px 18px 6px; font-weight: 600; }
+      nav a.item { display: block; padding: 7px 18px; color: var(--text); border-left: 2px solid transparent; }
+      nav a.item:hover { background: #12121a; text-decoration: none; }
+      nav a.item.active { background: #14141f; border-left-color: var(--accent); }
+      nav a.item small { display: block; color: var(--muted); font-size: 11.5px; }
+      nav .foot { margin-top: auto; padding: 14px 18px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+
+      main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+      .bar { display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--panel); min-height: 44px; flex-wrap: wrap; }
+      .bar .title { font-weight: 600; }
+      .bar .pkgs { color: var(--muted); font-size: 12px; }
+      .bar .spacer { flex: 1; }
+      select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font: inherit; }
+      iframe { flex: 1; width: 100%; border: 0; background: #000; display: block; }
+      .doc { flex: 1; overflow-y: auto; padding: 28px clamp(16px, 4vw, 48px) 48px; max-width: 920px; }
+      .doc h2 { margin: 0 0 6px; font-size: 22px; }
+      .doc h3 { margin: 28px 0 8px; font-size: 15px; }
+      .doc p { margin: 8px 0; color: #c8c8d4; }
+      table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+      th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      th { color: var(--muted); font-weight: 500; font-size: 12px; }
+      .hidden { display: none !important; }
+
+      @media (max-width: 800px) {
+        body { flex-direction: column; }
+        nav { width: 100%; max-height: 38vh; border-right: 0; border-bottom: 1px solid var(--line); }
+        nav .foot { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <nav id="nav"></nav>
+    <main>
+      <div class="bar hidden" id="bar">
+        <span class="title" id="bar-title"></span>
+        <span class="pkgs" id="bar-pkgs"></span>
+        <span class="spacer"></span>
+        <label class="pkgs">renderer
+          <select id="renderer">
+            <option value="">WebGPU (auto)</option>
+            <option value="webgl">WebGL2 backend</option>
+            <option value="classic">classic WebGLRenderer</option>
+          </select>
+        </label>
+        <a id="standalone" target="_blank" rel="noopener">open standalone ↗</a>
+        <a id="source" target="_blank" rel="noopener">source ↗</a>
+      </div>
+      <iframe id="frame" class="hidden" title="example" allow="fullscreen; gamepad"></iframe>
+      <div class="doc" id="doc"></div>
+    </main>
+
+    <script>
+      const REPO = 'https://github.com/gamefox-dev/three-ui-stack'
+      const NPM = 'https://www.npmjs.com/package/@implicit-invocation/'
+
+      // Keep in sync with examples/*: scripts/build-pages.ts fails the build if a web example is missing here.
+      const examples = [
+        { id: 'three-ui-tailwind-vite', title: 'Showcase', blurb: 'React + Tailwind v4: layout, typography, scrolling, dark mode',
+          pkgs: ['three-ui-tailwind', 'three-ui-react', 'three-ui', 'three-2d'] },
+        { id: 'three-ui-game-ui', title: 'Game UI', blurb: 'Gradients, shadows, outlined text, keyframes, backdrop blur, stress mode',
+          pkgs: ['three-ui-tailwind', 'three-ui', 'three-2d'] },
+        { id: 'three-ui-react-vite', title: 'React', blurb: 'Style objects, keyed lists, event propagation',
+          pkgs: ['three-ui-react', 'three-ui', 'three-2d'] },
+        { id: 'three-ui-basic', title: 'Plain API', blurb: 'No React: layout, text, images, clipping, ScrollView',
+          pkgs: ['three-ui', 'three-2d'] },
+        { id: 'three-2d-basic', title: 'Sprites', blurb: '20k sprites, atlas, particles, nine-patch, runtime font packing',
+          pkgs: ['three-2d', 'three-2d-font'] },
+      ]
+      const packages = [
+        ['three-2d', 'Batched 2D primitives: SpriteBatch, atlases, nine-patch, bitmap fonts, animation, particles.', 'three-2d-basic'],
+        ['three-2d-font', 'TTF/OTF → bitmap-font atlas: parser, rasterizers, packer, CLI.', 'three-2d-basic'],
+        ['three-ui', 'Retained-mode UI: Yoga flexbox, styles, text, images, ScrollView, input.', 'three-ui-basic'],
+        ['three-ui-react', 'react-reconciler renderer for three-ui.', 'three-ui-react-vite'],
+        ['three-ui-tailwind', 'Tailwind v4 classes → three-ui style data at build time.', 'three-ui-tailwind-vite'],
+      ]
+
+      const $ = (id) => document.getElementById(id)
+      const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+
+      $('nav').innerHTML =
+        '<h1>three-ui</h1><div class="sub">2D / UI stack on Three.js</div>' +
+        '<a class="item" data-id="overview" href="#overview">Overview &amp; install</a>' +
+        '<h2>Live examples</h2>' +
+        examples.map((e) => `<a class="item" data-id="${e.id}" href="#${e.id}">${esc(e.title)}<small>${esc(e.blurb)}</small></a>`).join('') +
+        `<div class="foot"><a href="${REPO}" target="_blank" rel="noopener">GitHub</a> · MIT · alpha (0.x)<br>Press Tab in an example to move focus.</div>`
+
+      $('doc').innerHTML = `
+        <h2>three-2d · three-ui</h2>
+        <p>A portable 2D / UI stack on Three.js, running anywhere Three's WebGPU renderer runs: browsers (WebGPU or the WebGL2 backend) and React Native.
+        Pick an example on the left; each one runs live, embedded here.</p>
+
+        <h3>Install</h3>
+        <pre>bun add @implicit-invocation/three-ui @implicit-invocation/three-2d three
+
+# React
+bun add @implicit-invocation/three-ui-react react
+# Tailwind v4 classes
+bun add @implicit-invocation/three-ui-tailwind
+bun add -d tailwindcss @tailwindcss/node @tailwindcss/vite
+# Font baking CLI
+bun add -d @implicit-invocation/three-2d-font</pre>
+        <p>npm and yarn work the same way (<code>npm i …</code>).</p>
+
+        <h3>Packages</h3>
+        <table>
+          <tr><th>Package</th><th>What it is</th><th>Demo</th></tr>
+          ${packages.map(([p, d, ex]) => `<tr><td><a href="${NPM}${p}" target="_blank" rel="noopener"><code>@implicit-invocation/${p}</code></a></td><td>${esc(d)}</td><td><a href="#${ex}">${esc(examples.find((e) => e.id === ex).title)}</a></td></tr>`).join('')}
+        </table>
+        <p>The React Native example (Expo + <code>react-native-wgpu</code>) has no web build; see
+        <a href="${REPO}/tree/main/examples/three-ui-react-native-webgpu" target="_blank" rel="noopener">its source</a>.</p>
+      `
+
+      const params = new URLSearchParams(location.search)
+      $('renderer').value = ['webgl', 'classic'].includes(params.get('r')) ? params.get('r') : ''
+
+      function exampleQuery() {
+        const r = $('renderer').value
+        const q = new URLSearchParams(location.search)
+        q.delete('r')
+        if (r === 'webgl') q.set('webgl', '')
+        else if (r === 'classic') q.set('renderer', 'webgl')
+        const s = q.toString().replace(/webgl=(&|$)/, 'webgl$1')
+        return s ? `?${s}` : ''
+      }
+
+      function route() {
+        const id = location.hash.slice(1) || 'overview'
+        const ex = examples.find((e) => e.id === id)
+        for (const a of document.querySelectorAll('nav a.item')) a.classList.toggle('active', a.dataset.id === (ex ? id : 'overview'))
+        $('doc').classList.toggle('hidden', !!ex)
+        $('bar').classList.toggle('hidden', !ex)
+        $('frame').classList.toggle('hidden', !ex)
+        document.title = ex ? `${ex.title} · three-ui` : 'three-ui · live examples'
+        if (!ex) { $('frame').removeAttribute('src'); return }
+        const url = `examples/${ex.id}/`
+        $('bar-title').textContent = ex.title
+        $('bar-pkgs').textContent = ex.pkgs.map((p) => `@implicit-invocation/${p}`).join(' · ')
+        $('standalone').href = url + exampleQuery()
+        $('source').href = `${REPO}/tree/main/examples/${ex.id}`
+        const src = url + exampleQuery()
+        if ($('frame').getAttribute('src') !== src) $('frame').src = src
+      }
+
+      $('renderer').addEventListener('change', () => {
+        const q = new URLSearchParams(location.search)
+        const r = $('renderer').value
+        r ? q.set('r', r) : q.delete('r')
+        history.replaceState(null, '', `${location.pathname}${q.size ? '?' + q : ''}${location.hash}`)
+        route()
+      })
+      addEventListener('hashchange', route)
+      route()
+    </script>
+  </body>
+</html>

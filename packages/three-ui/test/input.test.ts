@@ -166,11 +166,42 @@ describe('ScrollView', () => {
   it('scrolls with the wheel, consuming only when it can scroll (chaining outward)', () => {
     const { ui, scroll } = scrollSetup()
     const e = ui.input.wheel(100, 100, 0, 120)
-    expect(scroll.scrollY).toBe(120)
     expect(e?.defaultPrevented).toBe(true)
+    expect(scroll.scrollY).toBe(0) // a notched step eases toward its target…
+    ui.update(1)
+    expect(scroll.scrollY).toBe(120) // …and lands exactly on it
     scroll.scrollTo(0, 800)
     const e2 = ui.input.wheel(100, 100, 0, 50)
     expect(e2?.defaultPrevented).toBe(false) // at the end: lets an outer scroller take it
+  })
+
+  it('eases notched wheel steps, accumulates them, applies small (trackpad) deltas directly, and any other scroll cancels it', () => {
+    const { ui, scroll } = scrollSetup()
+    ui.input.wheel(100, 100, 0, 100)
+    ui.input.wheel(100, 100, 0, 100) // a second notch before the first landed
+    ui.update(0.016)
+    expect(scroll.scrollY).toBeGreaterThan(0)
+    expect(scroll.scrollY).toBeLessThan(200)
+    ui.update(0.016)
+    const mid = scroll.scrollY
+    expect(mid).toBeGreaterThan(0)
+    ui.update(1)
+    expect(scroll.scrollY).toBe(200) // both notches counted
+    expect(ui.needsRender).toBe(true) // the last frame is still to be drawn…
+    ui.render()
+    expect(ui.needsRender).toBe(false) // …and the animation stopped ticking
+
+    ui.input.wheel(100, 100, 0, 20) // trackpad-sized: immediate
+    expect(scroll.scrollY).toBe(220)
+    ui.input.wheel(100, 100, 0, 100)
+    scroll.scrollTo(0, 10) // programmatic scroll cancels the pending ease
+    ui.update(1)
+    expect(scroll.scrollY).toBe(10)
+    const hard = new ScrollView({ smoothWheel: false, style: { height: 50 }, children: [new View({ style: { height: 400 } })] })
+    ui.setRoot(new View({ style: { flex: 1 }, children: [hard] }))
+    ui.update()
+    ui.input.wheel(10, 10, 0, 100)
+    expect(hard.scrollY).toBe(100)
   })
 
   it('hit-tests children through the scroll offset', () => {
@@ -259,6 +290,7 @@ describe('ScrollView', () => {
     ui.input.keyDown('End')
     expect(h.scrollX).toBe(700)
     ui.input.wheel(50, 10, 0, -100)
+    ui.update(1)
     expect(h.scrollX).toBe(600)
   })
 

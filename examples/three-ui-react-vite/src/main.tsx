@@ -25,7 +25,7 @@ root.render(<App backend={boot.backend} />)
 
 loop((dt) => {
   ui.update(dt)
-  ui.render()
+  ui.renderIfNeeded() // an idle UI costs nothing: the canvas keeps its last picture
   ;(window as unknown as { __frames: number }).__frames = ((window as unknown as { __frames?: number }).__frames ?? 0) + 1
 })
 ;(window as unknown as { __backend: string }).__backend = boot.backend

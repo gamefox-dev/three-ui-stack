@@ -168,12 +168,14 @@ createThreeUI({
   renderer,
   maxTextures: 'auto',        // default: atlas pages, avatars and fonts share draw calls (up to 8 textures each); 1 = one per draw
   maxGradientStops: 3,        // cap the gradient shader's loop (2…8, default 8; ≤ 3-stop gradients are already cheap)
-  clip: 'shader',             // overflow clipping in the fragment shader: no render pass per clip, rounded corners honoured
+  clip: 'shader',             // default with a renderer: overflow clipping in the fragment shader (no render pass per clip, rounded corners honoured); 'scissor' = one render() per clip rect
   replayStaticFrames: true,   // default: render() redraws the previous frame's batch when nothing changed
 })
 ```
 
-`ui.stats` reports `drawCalls`, `renderPasses`, `texturesBound`, `textureSwitches` and `replayed` (true when the last `render()` replayed). `clip: 'scissor'` (default) uses one `renderer.render()` per distinct clip rectangle; with `'shader'` a node with `overflow: hidden` and `border-radius` also round-clips its children.
+`ui.stats` reports `drawCalls`, `renderPasses`, `texturesBound`, `textureSwitches` and `replayed` (true when the last `render()` replayed). `clip: 'scissor'` uses one `renderer.render()` per distinct clip rectangle — on `WebGPURenderer` each is a full render pass (~1 ms of CPU each, plus a tile load/store on mobile GPUs), so a screen with 7 clipped lists paid ~6 ms per frame; the default `'shader'` clips in the fragment shader instead, and a node with `overflow: hidden` and `border-radius` then round-clips its children.
+
+**Idle and scrolling cost.** `ui.update(dt)` then `ui.renderIfNeeded()` in your loop draws only when something changed (the canvas keeps its last picture), so a still UI costs nothing. `ScrollView` repaints only the visible rows (off-screen ones are culled), layout read-back touches only the nodes Yoga re-laid out, and notched mouse-wheel steps ease toward their target (`smoothWheel`, default on; trackpad deltas apply directly).
 
 ### Nine-patch frames for 2×/3× art
 
@@ -181,7 +183,7 @@ createThreeUI({
 
 ### Limitations
 
-`overflow: hidden` clips to the node's rectangle (with `clip: 'scissor'` a rounded card does not round-clip its children — give `Image`s their own radius, or use `clip: 'shader'`) · one border color (no per-side colors) · elliptical `border-radius` (`a / b`) uses the horizontal radii · image radii are one value · `opacity` multiplies each primitive (no offscreen group: overlapping children of a translucent parent show through each other) · gradients: ≤ 8 stops, no `repeating-*`/conic, no color hints · `drop-shadow` only on `Image`s and without blur · backdrop blur needs the default framebuffer and `renderer.copyFramebufferToTexture` (verified on WebGPU and WebGL2; not on a React Native device) · CSS `filter: blur()/brightness()…` on the node itself is not supported (only `backdrop-*`).
+`overflow: hidden` clips to the node's rectangle (with `clip: 'scissor'` a rounded card does not round-clip its children — give `Image`s their own radius, or keep the default `clip: 'shader'`) · one border color (no per-side colors) · elliptical `border-radius` (`a / b`) uses the horizontal radii · image radii are one value · `opacity` multiplies each primitive (no offscreen group: overlapping children of a translucent parent show through each other) · gradients: ≤ 8 stops, no `repeating-*`/conic, no color hints · `drop-shadow` only on `Image`s and without blur · backdrop blur needs the default framebuffer and `renderer.copyFramebufferToTexture` (verified on WebGPU and WebGL2; not on a React Native device) · CSS `filter: blur()/brightness()…` on the node itself is not supported (only `backdrop-*`).
 
 ## Runtime support
 

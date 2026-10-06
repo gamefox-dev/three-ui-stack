@@ -1,5 +1,21 @@
 # @implicit-invocation/three-2d-font
 
+## 0.5.0
+
+### Minor Changes
+
+- Scrolling and idle cost.
+  
+  - `createThreeUI` now clips in the fragment shader by default when it has a renderer (`clip: 'shader'`; pass `clip: 'scissor'` for the old behaviour). On `WebGPURenderer` every scissor clip was a separate render pass: a page with 7 clipped lists spent ~5.7 ms of CPU per frame on passes alone, now ~0.7 ms. Children of a rounded `overflow: hidden` box are round-clipped.
+  - `ui.renderIfNeeded()`: draws only when something changed (idle UIs cost nothing).
+  - Layout read-back only visits nodes Yoga laid out again (a text change no longer re-reads the whole tree).
+  - `ScrollView`: notched wheel steps ease toward their target and accumulate (`smoothWheel`, default true); trackpad deltas, drag, keys and `scrollTo` stay immediate.
+
+### Patch Changes
+
+- Updated dependencies
+  - @implicit-invocation/three-2d@0.5.0
+
 ## 0.4.0
 
 ### Minor Changes

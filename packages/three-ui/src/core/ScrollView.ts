@@ -12,9 +12,18 @@ export interface ScrollViewOptions extends UINodeOptions {
   horizontal?: boolean | undefined
   showsScrollIndicator?: boolean | undefined
   onScroll?: ((x: number, y: number) => void) | undefined
+  /**
+   * Ease notched mouse-wheel steps (|delta| ≥ 50) toward their target instead of jumping (libGDX `smoothScrolling`, like browsers do).
+   * Trackpad / fine-grained deltas always apply directly. Default true.
+   */
+  smoothWheel?: boolean | undefined
 }
 
 const DRAG_THRESHOLD = 6
+/** Wheel deltas at least this large come from a notched wheel (a trackpad sends many small ones). */
+const NOTCH_DELTA = 50
+/** Exponential approach rate (1/s) of smoothed wheel scrolling: ~70 ms time constant. */
+const SMOOTH_RATE = 14
 /** Inertia decay per millisecond (iOS-like deceleration rate). */
 const DECELERATION_PER_MS = 0.998
 const MIN_VELOCITY = 0.02
@@ -47,11 +56,15 @@ export class ScrollView extends View {
   private press: Press | null = null
   private velocity = 0
   private inertia = false
+  /** Pending target of a smoothed wheel scroll (null when not animating). */
+  private smoothTarget: number | null = null
+  smoothWheel: boolean
 
   constructor(options: ScrollViewOptions = {}) {
     super(options)
     this._horizontal = options.horizontal ?? false
     this.showsScrollIndicator = options.showsScrollIndicator ?? true
+    this.smoothWheel = options.smoothWheel ?? true
     this.onScroll = options.onScroll
     this.addEventListener('wheel', (e) => this.handleWheel(e))
     this.addEventListener('pointerdown', (e) => this.handlePointerDown(e))
@@ -99,8 +112,13 @@ export class ScrollView extends View {
     return Math.max(0, this.contentHeight - this.layout.height)
   }
 
-  /** Scroll to an absolute offset (clamped). Returns true if the offset changed. */
+  /** Scroll to an absolute offset (clamped), cancelling a smoothed wheel scroll in progress. Returns true if the offset changed. */
   scrollTo(x: number, y: number): boolean {
+    this.stopSmooth()
+    return this.applyScroll(x, y)
+  }
+
+  private applyScroll(x: number, y: number): boolean {
     const nx = this._horizontal ? Math.min(Math.max(x, 0), this.maxScrollX) : 0
     const ny = this._horizontal ? 0 : Math.min(Math.max(y, 0), this.maxScrollY)
     if (nx === this.scrollX && ny === this.scrollY) return false
@@ -115,6 +133,12 @@ export class ScrollView extends View {
     return this.scrollTo(this.scrollX + dx, this.scrollY + dy)
   }
 
+  private stopSmooth(): void {
+    if (this.smoothTarget === null) return
+    this.smoothTarget = null
+    if (!this.inertia) this._ui?._unregisterTickable(this)
+  }
+
   protected override onLayout(): void {
     let right = 0
     let bottom = 0
@@ -127,7 +151,8 @@ export class ScrollView extends View {
     this.contentWidth = Math.max(this.layout.width, right + this._yoga.getComputedPadding(E.Edge.Right))
     this.contentHeight = Math.max(this.layout.height, bottom + this._yoga.getComputedPadding(E.Edge.Bottom))
     // content or viewport size may have shrunk: re-clamp
-    this.scrollTo(this.scrollX, this.scrollY)
+    this.applyScroll(this.scrollX, this.scrollY)
+    if (this.smoothTarget !== null) this.smoothTarget = Math.min(Math.max(this.smoothTarget, 0), this._horizontal ? this.maxScrollX : this.maxScrollY)
   }
 
   // ───────────────────────────── input ─────────────────────────────
@@ -141,6 +166,20 @@ export class ScrollView extends View {
     const d = this.axisDelta(e)
     if (d === 0) return
     const before = this._horizontal ? this.scrollX : this.scrollY
+    if (this.smoothWheel && Math.abs(d) >= NOTCH_DELTA) {
+      // notches accumulate on the pending target, so a fast spin keeps accelerating toward the end
+      const max = this._horizontal ? this.maxScrollX : this.maxScrollY
+      const from = this.smoothTarget ?? before
+      const target = Math.min(Math.max(from + d, 0), max)
+      if (target !== before) {
+        if (this.smoothTarget === null && !this.inertia) this._ui?._registerTickable(this)
+        this.smoothTarget = target
+        e.stopPropagation()
+        e.preventDefault()
+      }
+      return
+    }
+    this.stopSmooth()
     this.scrollBy(this._horizontal ? d : 0, this._horizontal ? 0 : d)
     const after = this._horizontal ? this.scrollX : this.scrollY
     // consume only if we actually scrolled; at the end the wheel chains to an outer ScrollView
@@ -161,6 +200,7 @@ export class ScrollView extends View {
   private handlePointerDown(e: UIPointerEvent): void {
     if (e.button !== 0 || this.press) return
     this.stopInertia()
+    this.stopSmooth()
     const p = this.pos(e)
     this.press = { pointerId: e.pointerId, lastPos: p, lastTime: this.now(e), startPos: p, velocity: 0, dragging: false }
   }
@@ -194,7 +234,7 @@ export class ScrollView extends View {
     press.lastPos = p
     press.lastTime = t
     if (this._horizontal) this.scrollBy(-delta, 0)
-    else this.scrollBy(0, -delta)
+    else this.scrollBy(0, -delta) // (scrollBy cancels a smoothed wheel scroll)
     e.preventDefault()
   }
 
@@ -228,7 +268,7 @@ export class ScrollView extends View {
     if (!this.inertia) return
     this.inertia = false
     this.velocity = 0
-    this._ui?._unregisterTickable(this)
+    if (this.smoothTarget === null) this._ui?._unregisterTickable(this)
   }
 
   private handleKey(e: UIKeyEvent): void {
@@ -272,15 +312,28 @@ export class ScrollView extends View {
       old._unregisterTickable(this)
       this.press = null
       this.inertia = false
+      this.smoothTarget = null
     }
   }
 
   /** @internal Inertia integration step (dt in seconds). */
   _tick(dt: number): void {
+    if (this.smoothTarget !== null) {
+      const cur = this._horizontal ? this.scrollX : this.scrollY
+      const diff = this.smoothTarget - cur
+      // exponential approach, never slower than 200 px/s near the end (libGDX uses max(200 · dt, diff · 7 · dt))
+      const step = Math.max(Math.abs(diff) * (1 - Math.exp(-SMOOTH_RATE * dt)), 200 * dt)
+      const next = Math.abs(diff) <= step ? this.smoothTarget : cur + Math.sign(diff) * step
+      const done = next === this.smoothTarget
+      this.applyScroll(this._horizontal ? next : 0, this._horizontal ? 0 : next)
+      if (done) this.smoothTarget = null
+      if (done && !this.inertia) this._ui?._unregisterTickable(this)
+      return
+    }
     if (!this.inertia) return
     const ms = dt * 1000
     const before = this._horizontal ? this.scrollX : this.scrollY
-    this.scrollBy(this._horizontal ? this.velocity * ms : 0, this._horizontal ? 0 : this.velocity * ms)
+    this.applyScroll(this._horizontal ? this.scrollX + this.velocity * ms : 0, this._horizontal ? 0 : this.scrollY + this.velocity * ms)
     const after = this._horizontal ? this.scrollX : this.scrollY
     this.velocity *= Math.pow(DECELERATION_PER_MS, ms)
     if (Math.abs(this.velocity) < MIN_VELOCITY || after === before) this.stopInertia()

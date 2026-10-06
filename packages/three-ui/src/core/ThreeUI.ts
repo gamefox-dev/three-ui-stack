@@ -51,9 +51,10 @@ export interface ThreeUIOptions {
   /** Gradient shader cost cap, 2…8 (default 8). Gradients with ≤ 3 stops already take a cheaper loop; 3 caps the rest at 3 stops. */
   maxGradientStops?: number
   /**
-   * `overflow: hidden` / scroll clipping: `'scissor'` (default; hardware scissor, one `renderer.render()` per distinct clip rect) or
-   * `'shader'` (clipped in the fragment shader — anti-aliased, follows the box's rounded corners — so clips add no render passes and
-   * never split a draw call). Fixed at construction.
+   * `overflow: hidden` / scroll clipping: `'shader'` (default with a renderer: clipped in the fragment shader — anti-aliased, follows
+   * the box's rounded corners — so clips add no render passes and never split a draw call) or `'scissor'` (hardware scissor, one
+   * `renderer.render()` per distinct clip rect; on `WebGPURenderer` each is a full render pass, ~1 ms of CPU and a tile flush on
+   * mobile GPUs). Fixed at construction.
    */
   clip?: 'scissor' | 'shader'
   /**
@@ -147,6 +148,7 @@ export class ThreeUI implements Disposable {
   private _updatePending = true
   private disposed = false
   private replayStatic = true
+  private hasRendered = false
   /** @internal */ _paintDirty = true
 
   constructor(options: ThreeUIOptions) {
@@ -167,7 +169,7 @@ export class ThreeUI implements Disposable {
       maxSprites: options.maxSprites ?? (options.renderer ? 8192 : 16383),
       ...(options.maxTextures !== undefined ? { maxTextures: options.maxTextures } : {}),
       ...(options.maxGradientStops !== undefined ? { maxGradientStops: options.maxGradientStops } : {}),
-      ...(options.clip ? { clip: options.clip } : {}),
+      ...(options.renderer || options.clip ? { clip: options.clip ?? 'shader' } : {}),
     })
     this.replayStatic = options.replayStaticFrames !== false
     this.ctx = new BatchDrawContext(this.batch, this.counters)
@@ -362,11 +364,17 @@ export class ThreeUI implements Disposable {
     root._yoga.calculateLayout(undefined, undefined, E.Direction.LTR)
     this.stats.layoutPasses++
     let count = 0
+    // Yoga flags every node it laid out; clean subtrees keep their old rects, so only flagged nodes are read back
     const read = (n: UINode): void => {
       count++
-      n._readLayout()
+      const y = n._yoga
+      const fresh = y.hasNewLayout()
+      if (fresh) {
+        y.markLayoutSeen()
+        n._readLayout()
+      }
       for (const c of n.children) read(c)
-      n._afterLayout()
+      if (fresh) n._afterLayout()
     }
     read(root)
     this.stats.nodes = count
@@ -374,6 +382,18 @@ export class ThreeUI implements Disposable {
   }
 
   // ───────────────────────────── render ─────────────────────────────
+
+  /**
+   * `render()` only when something changed since the last draw (an invalidated style / layout / paint, a running animation or
+   * inertia scroll) or nothing was drawn yet; returns whether it drew. The canvas keeps its last picture, so an idle UI costs nothing.
+   * Call `update(dt)` first (it advances animations). Don't use it when you draw other content into the same canvas every frame.
+   */
+  renderIfNeeded(): boolean {
+    if (this.disposed) return false
+    if (this.hasRendered && !this.needsRender) return false
+    this.render()
+    return true
+  }
 
   /** Resolve pending work, then rebuild the batches and draw the UI (always draws). */
   render(): void {
@@ -392,11 +412,13 @@ export class ThreeUI implements Disposable {
     if (this.replayStatic && !this._paintDirty && this.tickables.size === 0 && !this.engine.hasRunning && batch.canReplay) {
       // nothing changed: the previous frame's quads are still in the batch buffers
       batch.replay()
+      this.hasRendered = true
       this.stats.replayed = true
       this.copyBatchStats()
       return
     }
     this.stats.replayed = false
+    this.hasRendered = true
     batch.stats.reset()
     this.counters.paintOps = 0
     this.paintStats.nodesPainted = 0

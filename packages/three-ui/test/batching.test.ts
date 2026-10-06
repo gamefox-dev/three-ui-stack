@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Color4, NinePatch, TextureAtlas } from '@implicit-invocation/three-2d'
 import { Image, NinePatchView, View, createThreeUI, type ThreeUIRenderer } from '../src'
 import { loadFixtureFonts, makeTexture, makeUI } from './helpers'
@@ -96,6 +96,50 @@ describe('createThreeUI batching options', () => {
     // the three clipped images straddle their clips: three entries, with the box's corner radii
     const table = shader.ui.batch.clipTable!
     expect(table.data[8]).toBe(12)
+  })
+})
+
+describe('renderIfNeeded and incremental layout reads', () => {
+  it('draws once, then only when something changed', () => {
+    const renderer = mockRenderer(16)
+    const ui = createThreeUI({ renderer, width: 100, height: 100, fonts: loadFixtureFonts() })
+    const box = new View({ style: { width: 40, height: 40, backgroundColor: '#336699' } })
+    ui.setRoot(new View({ children: [box] }))
+    ui.update(0.016)
+    expect(ui.renderIfNeeded()).toBe(true)
+    const draws = renderer.renders
+    ui.update(0.016)
+    expect(ui.renderIfNeeded()).toBe(false)
+    expect(renderer.renders).toBe(draws)
+    box.setStyle({ width: 40, height: 40, backgroundColor: '#aa3333' })
+    ui.update(0.016)
+    expect(ui.renderIfNeeded()).toBe(true)
+    ui.resize(120, 100)
+    expect(ui.renderIfNeeded()).toBe(true)
+  })
+
+  it('shader clip is the default with a renderer; headless UIs keep the scissor', () => {
+    expect(createThreeUI({ renderer: mockRenderer(16), width: 10, height: 10, fonts: loadFixtureFonts() }).batch.clipMode).toBe('shader')
+    expect(createThreeUI({ renderer: mockRenderer(16), width: 10, height: 10, fonts: loadFixtureFonts(), clip: 'scissor' }).batch.clipMode).toBe('scissor')
+    expect(makeUI().batch.clipMode).toBe('scissor')
+  })
+
+  it('only nodes Yoga laid out again are read back, and layout changes still reach every node', () => {
+    const ui = makeUI({ width: 400, height: 300 })
+    const rows = Array.from({ length: 50 }, () => new View({ style: { height: 10 } }))
+    const label = new View({ style: { width: 20, height: 20 } })
+    const list = new View({ style: { flex: 1 }, children: rows })
+    ui.setRoot(new View({ style: { flex: 1 }, children: [label, list] }))
+    ui.update()
+    expect(rows[49]!.layout.y).toBe(490)
+    const reads = vi.spyOn(rows[3]!, '_readLayout')
+    label.setStyle({ width: 30, height: 20 }) // dirties the root chain only
+    ui.update()
+    expect(reads).not.toHaveBeenCalled()
+    list.setStyle({ flex: 1, paddingTop: 7 })
+    ui.update()
+    expect(rows[0]!.layout.y).toBe(7) // relative to the list
+    expect(rows[49]!.layout.y).toBe(7 + 490)
   })
 })
 

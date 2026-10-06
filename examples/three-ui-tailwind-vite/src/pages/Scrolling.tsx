@@ -28,15 +28,18 @@ export function Scrolling() {
   const avatars = useMemo(() => Array.from({ length: 12 }, (_, i) => makeAvatar(i + 20)), [])
   const [count, setCount] = useState(1000)
   const [y, setY] = useState(0)
+  const yNow = useRef(0)
   const [selected, setSelected] = useState(-1)
   const select = useCallback((i: number) => setSelected(i), [])
   const [culled, setCulled] = useState(0)
   const list = useRef<ScrollNode | null>(null)
   useInterval(() => setCulled(ui.stats.nodesCulled), 400)
+  // the chip is text: re-laying out the page on every scroll event would cost more than the scrolling itself
+  useInterval(() => setY(yNow.current), 100)
 
   return (
     <View className="gap-4 flex-1">
-      <PageTitle title="ScrollView" subtitle="No DOM scroll containers: content size comes from Yoga, drawing goes through the batch clip stack (scissor) and off-screen rows are culled." />
+      <PageTitle title="ScrollView" subtitle="No DOM scroll containers: content size comes from Yoga, clipping happens in the fragment shader (no render pass per clip), only visible rows are painted, and wheel notches ease to their target." />
       <Row>
         <Chip label={`rows: ${count}`} tone="violet" />
         <Chip label={`scrollY: ${Math.round(y)}`} />
@@ -49,7 +52,7 @@ export function Scrolling() {
 
       <View className="flex-row gap-4 flex-wrap flex-1">
         <Card title="VERTICAL LIST · wheel, drag, fling, PageUp/PageDown when focused" className="grow basis-72 min-h-64 h-96">
-          <ScrollView ref={list} focusable onScroll={(_x, sy) => setY(sy)} className="flex-1 gap-1 pr-2 border-2 border-transparent focus:border-violet-500 rounded-xl">
+          <ScrollView ref={list} focusable onScroll={(_x, sy) => (yNow.current = sy)} className="flex-1 gap-1 pr-2 border-2 border-transparent focus:border-violet-500 rounded-xl">
             {Array.from({ length: count }, (_, i) => (
               <PersonRow key={i} i={i} count={count} selected={selected === i} avatar={avatars[i % avatars.length]!} onSelect={select} />
             ))}

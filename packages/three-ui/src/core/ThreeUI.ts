@@ -1,4 +1,4 @@
-import { PolygonSpriteBatch, createOrthographicCamera, updateOrthographicCamera, Color4, parseColor, type BackdropQuality, type BatchRenderer, type ColorLike, type Disposable } from '@implicit-invocation/three-2d'
+import { PolygonSpriteBatch, createOrthographicCamera, updateOrthographicCamera, Color4, parseColor, type BackdropQuality, type BatchRenderer, type BlendMode, type ColorLike, type Disposable } from '@implicit-invocation/three-2d'
 import { Color, SRGBColorSpace, Scene, type OrthographicCamera } from 'three'
 import { AnimationEngine } from '../anim/engine'
 import { createEnvironment, type UIEnvironment } from '../env'
@@ -382,6 +382,15 @@ export class ThreeUI implements Disposable {
   }
 
   // ───────────────────────────── render ─────────────────────────────
+
+  /**
+   * Build and compile the UI's shaders now, so the first frames don't drop: the first draw of a blend mode costs tens of milliseconds
+   * (two materials per blend mode, ~20 ms each, whatever the number of draw calls). Await it behind a loading screen; it draws nothing
+   * visible. `blends` defaults to `['normal']` — add `'additive'` / `'multiply'` / `'screen'` if your UI uses them. No-op without a renderer.
+   */
+  warmup(blends?: readonly BlendMode[]): Promise<void> {
+    return this.batch.warmup(this.camera, blends)
+  }
 
   /**
    * `render()` only when something changed since the last draw (an invalidated style / layout / paint, a running animation or

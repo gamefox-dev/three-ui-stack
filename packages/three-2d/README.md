@@ -88,6 +88,10 @@ new SpriteBatch({ renderer, maxTextures: 1 })  // one texture per draw call (the
 
 `pushClip` clips with the hardware scissor by default, which costs one `renderer.render()` per distinct clip rectangle (≈ 1 ms of fixed CPU on a phone). With `new SpriteBatch({ renderer, clip: 'shader' })` clipping happens in the fragment shader instead: it is anti-aliased, never splits a draw call or adds a render pass, quads fully inside their clip cost nothing extra, quads fully outside are skipped, and `pushClip(x, y, w, h, radii)` rounds the clip's corners. (Nested clips intersect their rectangles; only the innermost rounded rectangle is honoured.)
 
+### Shader warm-up (no first-use hitch)
+
+Shaders are built lazily: the first draw of a blend mode costs ~20–40 ms per material (shader graph build + pipeline / program creation). A batch keeps just **two materials per blend mode**, however many draw calls a frame has — a draw call binds its texture slots in `mesh.onBeforeRender` — so that cost is paid at most twice per blend mode, never again when a scroll or a new screen needs more draw calls. To pay it up front, behind a loading screen: `await batch.warmup(camera, ['normal', 'additive'])` (uses `compileAsync` on a `WebGPURenderer`, a 1 × 1 scissored degenerate draw otherwise; nothing visible changes).
+
 ### Gradient cost
 
 `maxGradientStops` (2…8, default 8) caps the gradient shader's loop. Gradients with ≤ 3 stops always take a cheaper path (2 mixes instead of 7), and boxes without a gradient never pay for the gradient code. `maxGradientStops: 3` also makes every gradient take the cheap path (extra stops are dropped). Shadows with `blur: 0` skip the Gaussian and cost two SDF evaluations.

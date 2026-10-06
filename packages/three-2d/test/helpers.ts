@@ -24,6 +24,7 @@ export class MockRenderer implements BatchRenderer {
     scene.traverse((o) => {
       const m = o as Mesh
       if (m.isMesh && m.visible) {
+        m.onBeforeRender(this as never, scene as never, _camera, m.geometry, m.material as never, null as never) // a real renderer calls it before each draw
         meshes.push({ start: m.geometry.drawRange.start, count: m.geometry.drawRange.count, renderOrder: m.renderOrder })
       }
     })

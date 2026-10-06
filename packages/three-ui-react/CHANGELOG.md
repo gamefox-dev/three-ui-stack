@@ -1,5 +1,20 @@
 # @implicit-invocation/three-ui-react
 
+## 0.7.0
+
+### Minor Changes
+
+- No more first-use frame hitches.
+  
+  - A batch now keeps **two materials per blend mode** instead of one per draw-call index; a draw call binds its texture slots in `mesh.onBeforeRender`. Every newly reached draw-call index used to build and compile a new material (~23 ms on WebGPU and classic WebGL), which dropped a frame the first time a scroll or screen needed more draw calls. It also removes the classic renderer's "maximum number of uniforms groups" error on frames with many draw calls.
+  - `batch.warmup(camera, blends?)` / `await ui.warmup(blends?)` build and compile the shaders up front (`compileAsync` on `WebGPURenderer`, a 1×1 scissored degenerate draw otherwise). The examples call it after loading fonts.
+
+### Patch Changes
+
+- Updated dependencies
+  - @implicit-invocation/three-2d@0.7.0
+  - @implicit-invocation/three-ui@0.7.0
+
 ## 0.6.0
 
 ### Minor Changes

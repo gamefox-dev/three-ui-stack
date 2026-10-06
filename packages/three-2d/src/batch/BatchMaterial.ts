@@ -557,10 +557,15 @@ function createMaterial(blend: BlendMode, options: BatchMaterialOptions, sharedP
   return material
 }
 
+/** Materials per blend mode (see {@link BatchMaterialCache}). */
+export const MATERIALS_PER_BLEND = 2
+
 /**
- * Lazily creates and caches batch materials. One material per (blend mode, draw-call index): each draw call of a frame owns its
- * material, so its texture slots can be set per draw without disturbing another draw call (a classic `WebGLRenderer` also
- * re-uploads material uniforms exactly when the material changes between draws).
+ * Lazily creates and caches batch materials: {@link MATERIALS_PER_BLEND} per blend mode, however many draw calls a frame has. Draw call
+ * `i` of a blend uses material `i % 2` and binds its texture slots right before it is drawn (`mesh.onBeforeRender`), so the shader is
+ * built twice per blend mode — not once per draw call (a build costs ~20 ms the first time a draw call index is reached). Two, not one,
+ * because a classic `WebGLRenderer` only re-uploads a material's uniforms (the slot textures) when the material *changes* between two
+ * consecutive draws; consecutive draw calls of one blend alternate, and draws of different blends use different materials.
  */
 export class BatchMaterialCache implements Disposable {
   private readonly cache = new Map<BlendMode, BatchNodeMaterial[]>()
@@ -571,8 +576,9 @@ export class BatchMaterialCache implements Disposable {
   get(blend: BlendMode, index: number, sharedProgram: boolean): BatchNodeMaterial {
     let list = this.cache.get(blend)
     if (!list) this.cache.set(blend, (list = []))
-    let m = list[index]
-    if (!m) list[index] = m = createMaterial(blend, this.options, sharedProgram)
+    const k = index % MATERIALS_PER_BLEND
+    let m = list[k]
+    if (!m) list[k] = m = createMaterial(blend, this.options, sharedProgram)
     return m
   }
 
@@ -582,14 +588,14 @@ export class BatchMaterialCache implements Disposable {
 
   get size(): number {
     let n = 0
-    for (const list of this.cache.values()) n += list.length
+    for (const list of this.cache.values()) for (const m of list) if (m) n++
     return n
   }
 
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
-    for (const list of this.cache.values()) for (const m of list) m.dispose()
+    for (const list of this.cache.values()) for (const m of list) m?.dispose()
     this.cache.clear()
   }
 }

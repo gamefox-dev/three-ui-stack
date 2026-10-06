@@ -38,6 +38,7 @@ import {
   MODE_GLYPH_SHAPED,
   MODE_RADIX,
   CLIP_RADIX,
+  MATERIALS_PER_BLEND,
   MODE_SHADOW_INSET,
   MODE_SHADOW_INSET_HARD,
   MODE_SHADOW_OUTER,
@@ -1573,7 +1574,13 @@ export class SpriteBatch implements Disposable {
       geometry.addEventListener('dispose', this.onGeometryDispose)
       // a classic WebGLRenderer links one GL program for all batch materials of a blend mode (see `BatchNodeMaterial.sharedProgramKey`)
       const shared = (this.renderer as { isWebGLRenderer?: boolean } | null)?.isWebGLRenderer === true
-      mesh = new Mesh(geometry, this.getMaterials().get(blend, i, shared))
+      const materials = this.getMaterials()
+      mesh = new Mesh(geometry, materials.get(blend, i, shared))
+      mesh.userData = { slots: [] as Texture[] }
+      // Materials are shared by draw calls (two per blend): the slot textures are set per draw, just before it
+      mesh.onBeforeRender = function (this: Mesh) {
+        ;(this.material as BatchNodeMaterial).setTextures((this.userData as { slots: Texture[] }).slots, materials.placeholders)
+      }
       mesh.frustumCulled = false
       mesh.matrixAutoUpdate = false
       mesh.visible = false
@@ -1626,8 +1633,8 @@ export class SpriteBatch implements Disposable {
     for (let i = 0; i < this.segmentCount; i++) {
       const seg = this.segments[i]!
       const mesh = this.acquireMesh(seg.blend)
-      // this draw call's texture table goes into the mesh's own material (unused slots keep the placeholder)
-      ;(mesh.material as BatchNodeMaterial).setTextures(seg.textures, this.getMaterials().placeholders)
+      // this draw call's texture table is bound by the mesh right before it is drawn (`onBeforeRender`)
+      ;(mesh.userData as { slots: Texture[] }).slots = seg.textures
       this.stats.texturesBound += seg.textures.length
       mesh.geometry.setDrawRange(seg.indexStart, seg.indexCount)
       mesh.renderOrder = i
@@ -1635,6 +1642,71 @@ export class SpriteBatch implements Disposable {
       this.segMeshes[i] = mesh
     }
     if (this.renderer && this.camera) this.renderGroups(this.renderer, this.camera)
+  }
+
+  /**
+   * Build (and compile) the batch's shaders now instead of on the first frame that needs them: the first draw of a blend mode costs tens
+   * of milliseconds (shader build + pipeline / program creation), which shows up as a dropped frame. Draws one degenerate triangle per
+   * material into a 1 × 1 scissor, so nothing visible changes. `blends` defaults to `['normal']`. Resolves when `renderer.compileAsync`
+   * (a `WebGPURenderer`) has finished; without one it renders synchronously. Needs a renderer.
+   */
+  async warmup(camera: Camera, blends: readonly BlendMode[] = ['normal']): Promise<void> {
+    const renderer = this.renderer
+    if (!renderer || this.disposed) return
+    this.resolveSlots()
+    const materials = this.getMaterials()
+    const shared = (renderer as { isWebGLRenderer?: boolean }).isWebGLRenderer === true
+    // own tiny buffers: a dispose of this geometry (the node handler of a classic renderer does it after every build) must not
+    // delete the shared vertex buffer the real draw calls use
+    const buffer = new InterleavedBuffer(new Float32Array(VERTEX_STRIDE * 3), VERTEX_STRIDE)
+    const geometry = new BufferGeometry()
+    geometry.setAttribute('position', new InterleavedBufferAttribute(buffer, 3, 0))
+    geometry.setAttribute('uv', new InterleavedBufferAttribute(buffer, 2, OFFSET_UV))
+    geometry.setAttribute('aColor', new InterleavedBufferAttribute(buffer, 4, OFFSET_COLOR))
+    geometry.setAttribute('aLocal', new InterleavedBufferAttribute(buffer, 2, OFFSET_LOCAL))
+    geometry.setAttribute('aShape', new InterleavedBufferAttribute(buffer, 4, OFFSET_SHAPE))
+    geometry.setAttribute('aBorder', new InterleavedBufferAttribute(buffer, 4, OFFSET_BORDER))
+    geometry.setAttribute('aMode', new InterleavedBufferAttribute(buffer, 1, OFFSET_MODE))
+    geometry.setAttribute('aData', new InterleavedBufferAttribute(buffer, 1, OFFSET_DATA))
+    geometry.setIndex(new BufferAttribute(new Uint32Array(3), 1)) // (0, 0, 0): zero area
+    const scene = new Scene()
+    const meshes: Mesh[] = []
+    for (const blend of blends) {
+      for (let i = 0; i < MATERIALS_PER_BLEND; i++) {
+        const mesh = new Mesh(geometry, materials.get(blend, i, shared))
+        mesh.frustumCulled = false
+        mesh.matrixAutoUpdate = false
+        mesh.onBeforeRender = function (this: Mesh) {
+          ;(this.material as BatchNodeMaterial).setTextures([], materials.placeholders)
+        }
+        meshes.push(mesh)
+        scene.add(mesh)
+      }
+    }
+    const compile = (renderer as { compileAsync?: (scene: Object3D, camera: Camera) => Promise<void> }).compileAsync
+    try {
+      if (compile) {
+        await compile.call(renderer, scene, camera)
+      } else {
+        const prevAuto = renderer.autoClear
+        const prevTest = renderer.getScissorTest()
+        const prevScissor = renderer.getScissor(this.tmpScissor).clone()
+        renderer.autoClear = false
+        renderer.setScissor(0, 0, 1, 1)
+        renderer.setScissorTest(true)
+        try {
+          renderer.render(scene, camera)
+        } finally {
+          renderer.autoClear = prevAuto
+          renderer.setScissorTest(prevTest)
+          renderer.setScissor(prevScissor.x, prevScissor.y, prevScissor.z, prevScissor.w)
+        }
+      }
+    } finally {
+      for (const mesh of meshes) scene.remove(mesh)
+      // the materials stay (that is the point); only the throwaway geometry goes
+      void Promise.resolve().then(() => geometry.dispose())
+    }
   }
 
   /**

@@ -33,6 +33,7 @@ ui = createThreeUI({
 })
 const U = ui
 await Promise.all([registerInterFonts(U.fonts), registerDisplayFonts(U.fonts)])
+await U.warmup() // build the shaders now, not on the first frames
 attachDOMInput(U, canvas)
 world.resize(boot.size.width, boot.size.height)
 

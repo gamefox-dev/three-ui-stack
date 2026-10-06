@@ -21,6 +21,7 @@ ui = createThreeUI({
   clearColor: '#09090b',
 })
 await registerInterFonts(ui.fonts)
+await ui.warmup() // build the shaders now, not during the first scroll
 attachDOMInput(ui, canvas)
 // follow the OS color scheme at startup; the app's toggle then drives `ui.setColorScheme` explicitly
 bindPrefersColorScheme(ui, window.matchMedia('(prefers-color-scheme: dark)'))

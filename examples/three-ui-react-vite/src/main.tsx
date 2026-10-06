@@ -16,6 +16,7 @@ ui = createThreeUI({
   clearColor: '#09090b',
 })
 await registerInterFonts(ui.fonts)
+await ui.warmup() // build the shaders now, not on the first frames
 ui.setTheme({ root: { color: '#fafafa', fontFamily: 'Inter', fontSize: 14 } })
 attachDOMInput(ui, canvas)
 

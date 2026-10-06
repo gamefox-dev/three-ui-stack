@@ -326,6 +326,49 @@ describe("clip: 'shader'", () => {
   })
 })
 
+describe('materials and warmup', () => {
+  it('shares two materials per blend mode however many draw calls a frame has, and binds slots per draw', () => {
+    const renderer = new MockRenderer()
+    const batch = new SpriteBatch({ renderer, maxTextures: 1 })
+    const textures = Array.from({ length: 9 }, () => makeTexture())
+    batch.begin(createOrthographicCamera(100, 100))
+    for (const [i, t] of textures.entries()) batch.draw(t, i * 10, 0, 8, 8) // nine draw calls
+    batch.setBlendMode('additive')
+    batch.draw(textures[0]!, 0, 20, 8, 8)
+    batch.end()
+    const materials = (batch as unknown as { materials: { size: number } }).materials
+    expect(materials.size).toBe(3) // nine normal draw calls share 2 materials; the single additive one adds 1
+    expect(batch.meshCount).toBe(10)
+    const used = new Set(batch.scene.children.map((m) => (m as unknown as { material: unknown }).material))
+    expect(used.size).toBe(3)
+    // each mesh binds its own textures right before drawing, even though a material is shared
+    const bound: unknown[] = []
+    const first = batch.scene.children[0] as unknown as { material: BatchNodeMaterial; userData: { slots: unknown[] }; onBeforeRender(...a: unknown[]): void }
+    first.onBeforeRender()
+    bound.push(first.material.slots[0]!.value)
+    const third = batch.scene.children[2] as unknown as typeof first
+    third.onBeforeRender()
+    expect(bound[0]).toBe(textures[0])
+    expect(third.material.slots[0]!.value).toBe(textures[2])
+    batch.dispose()
+  })
+
+  it('warmup builds the shaders into a 1 × 1 scissor without touching the frame buffers', async () => {
+    const renderer = new MockRenderer()
+    const batch = new SpriteBatch({ renderer, maxTextures: 2 })
+    await batch.warmup(createOrthographicCamera(100, 100), ['normal', 'additive'])
+    expect(renderer.calls).toHaveLength(1)
+    expect(renderer.calls[0]!.scissor).toEqual([0, 0, 1, 1])
+    expect(renderer.calls[0]!.meshes).toHaveLength(4) // two materials per blend
+    expect((batch as unknown as { materials: { size: number } }).materials.size).toBe(4)
+    expect(batch.meshCount).toBe(0) // the real draw-call pool is untouched
+    expect(batch.canReplay).toBe(false)
+    // and a headless batch simply does nothing
+    await new SpriteBatch().warmup(createOrthographicCamera(10, 10))
+    batch.dispose()
+  })
+})
+
 describe('replay', () => {
   it('draws the previous frame again without rebuilding or re-uploading it', () => {
     const renderer = new MockRenderer()

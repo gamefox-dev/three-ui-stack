@@ -175,6 +175,8 @@ createThreeUI({
 
 `ui.stats` reports `drawCalls`, `renderPasses`, `texturesBound`, `textureSwitches` and `replayed` (true when the last `render()` replayed). `clip: 'scissor'` uses one `renderer.render()` per distinct clip rectangle — on `WebGPURenderer` each is a full render pass (~1 ms of CPU each, plus a tile load/store on mobile GPUs), so a screen with 7 clipped lists paid ~6 ms per frame; the default `'shader'` clips in the fragment shader instead, and a node with `overflow: hidden` and `border-radius` then round-clips its children.
 
+**First-use hitch.** `await ui.warmup()` (optionally `['normal', 'additive', …]`) builds and compiles the UI's shaders up front — about 100–300 ms once, instead of ~25 ms dropped frames the first time a screen needs them. The UI uses two materials per blend mode however many draw calls a frame has, so nothing new is built when a scroll or screen change adds draw calls.
+
 **Idle and scrolling cost.** `ui.update(dt)` then `ui.renderIfNeeded()` in your loop draws only when something changed (the canvas keeps its last picture), so a still UI costs nothing. `ScrollView` repaints only the visible rows (off-screen ones are culled), layout read-back touches only the nodes Yoga re-laid out, and notched mouse-wheel steps ease toward their target (`smoothWheel`, default on; trackpad deltas apply directly).
 
 ### ScrollView feel (Cocos Creator model)

@@ -1,5 +1,7 @@
 # three-2d · three-ui
 
+[![The three-ui showcase: React + Tailwind v4 rendered by three-ui on WebGPU](docs/screenshot.png)](https://gamefox-dev.github.io/three-ui-stack/#three-ui-tailwind-vite)
+
 A portable **2D / UI stack on Three.js**, running anywhere Three's WebGPU renderer runs: browsers (WebGPU or the WebGL2 backend) and React Native (`react-native-wgpu`).
 
 > Tailwind produces styles. Yoga produces geometry. `@implicit-invocation/three-ui` produces paint commands. `@implicit-invocation/three-2d` produces triangles. Three.js produces GPU work.

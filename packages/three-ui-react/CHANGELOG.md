@@ -1,5 +1,13 @@
 # @implicit-invocation/three-ui-react
 
+## 0.9.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @implicit-invocation/three-2d@0.9.0
+  - @implicit-invocation/three-ui@0.9.0
+
 ## 0.8.0
 
 ### Minor Changes

@@ -325,6 +325,8 @@ export class AnimationEngine {
   private apply(node: UINode, fx: NodeFx, live: boolean): void {
     const base = fx.base!
     const vis = fx.visible ?? (fx.visible = { ...base })
+    // animated transforms / shadows move the node's paint bounds (and mutate `computedStyle` in place, so nothing else tells the node)
+    node._markExtDirty()
     const v = vis as unknown as Record<string, unknown>
     const b = base as unknown as Record<string, unknown>
     // remember outgoing layout values so Yoga only sees real changes

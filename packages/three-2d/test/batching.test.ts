@@ -243,6 +243,43 @@ describe('NinePatch scale, split and pad', () => {
   })
 })
 
+describe('capacity growth', () => {
+  /** Draws `n` sprites in one frame; returns the flush reasons of that frame. */
+  const frame = (batch: SpriteBatch, n: number): FlushReason[] => {
+    const t = makeTexture()
+    const reasons: FlushReason[] = []
+    batch.onFlush = (r) => reasons.push(r)
+    batch.begin(createOrthographicCamera(200, 200))
+    for (let i = 0; i < n; i++) batch.draw(t, i, 0, 4, 4)
+    batch.end()
+    return reasons
+  }
+
+  it('doubles after a frame that flushed for capacity, up to the limit, keeping the materials', () => {
+    const batch = new SpriteBatch({ renderer: new MockRenderer(), maxTextures: 1, maxSprites: 4, maxSpritesLimit: 16 })
+    frame(batch, 3)
+    expect(batch.maxSprites).toBe(4)
+    expect(frame(batch, 6)).toEqual(['capacity', 'end']) // overflows: one extra flush
+    expect(batch.maxSprites).toBe(4) // grows at the next begin
+    expect(frame(batch, 6)).toEqual(['end']) // fits now
+    expect(batch.maxSprites).toBe(8)
+    frame(batch, 40)
+    frame(batch, 40)
+    expect(batch.maxSprites).toBe(16) // the limit
+    frame(batch, 40)
+    expect(batch.maxSprites).toBe(16)
+    batch.dispose()
+  })
+
+  it('stays fixed when the limit equals the capacity', () => {
+    const batch = new SpriteBatch({ renderer: new MockRenderer(), maxTextures: 1, maxSprites: 4, maxSpritesLimit: 4 })
+    frame(batch, 10)
+    frame(batch, 10)
+    expect(batch.maxSprites).toBe(4)
+    batch.dispose()
+  })
+})
+
 describe("clip: 'shader'", () => {
   it('never splits a draw call, culls quads outside, and only straddling quads get a clip entry', () => {
     const batch = new SpriteBatch({ clip: 'shader', maxTextures: 1 })
@@ -308,6 +345,26 @@ describe("clip: 'shader'", () => {
     expect(packed(batch, 1).clip).toBe(1)
     const d = batch.clipTable!.data
     expect(Array.from(d.slice(4, 12))).toEqual([50, 50, 50, 50, 20, 20, 20, 20])
+    batch.dispose()
+  })
+
+  it('marks quads in every corner square of a rounded clip, with per-corner radii', () => {
+    const batch = new SpriteBatch({ clip: 'shader', maxTextures: 1 })
+    const t = makeTexture()
+    batch.begin()
+    batch.pushClip(0, 0, 100, 100, [20, 20, 20, 20])
+    batch.draw(t, 2, 2, 10, 10) // top-left
+    batch.draw(t, 88, 2, 10, 10) // top-right
+    batch.draw(t, 88, 88, 10, 10) // bottom-right
+    batch.draw(t, 2, 88, 10, 10) // bottom-left
+    batch.draw(t, 40, 2, 20, 10) // top edge between the corners: clear
+    batch.popClip()
+    batch.pushClip(0, 0, 100, 100, [0, 30, 0, 0])
+    batch.draw(t, 2, 2, 10, 10) // square corner (r = 0): clear
+    batch.draw(t, 72, 2, 10, 10) // inside the large top-right square
+    batch.popClip()
+    batch.end()
+    expect([0, 1, 2, 3, 4, 5, 6].map((q) => packed(batch, q).clip > 0)).toEqual([true, true, true, true, false, false, true])
     batch.dispose()
   })
 

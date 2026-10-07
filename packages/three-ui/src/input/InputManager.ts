@@ -1,5 +1,6 @@
 import { Affine2 } from '@implicit-invocation/three-2d'
 import type { UINode } from '../core/UINode'
+import { ensureExtents } from '../paint/extents'
 import { buildTransform } from '../paint/transform'
 import {
   NO_MODIFIERS,
@@ -71,7 +72,10 @@ export class InputManager {
   private hit(node: UINode, x: number, y: number): UINode | null {
     const cs = node.computedStyle
     if (cs.display === 'none') return null
-    // x,y are in the parent's content space; move into this node's local space
+    // x,y are in the parent's content space: skip the whole subtree when the point is outside everything it can paint
+    const e = ensureExtents(node)
+    if (x < e.x0 || y < e.y0 || x >= e.x1 || y >= e.y1) return null
+    // move into this node's local space
     let lx = x - node.layout.x
     let ly = y - node.layout.y
     if (cs.transform && cs.transform.length > 0) {

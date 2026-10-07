@@ -102,6 +102,8 @@ Shaders are built lazily: the first draw of a blend mode costs ~20–40 ms per m
 
 ### Flush rules & counters
 
+**Capacity** (`maxSprites`, default 4096 quads) grows by itself: a frame that had to flush for capacity (extra draw calls, no frame replay) doubles the buffers at the next `begin()`, up to `maxSpritesLimit` (default 32768; set it to `maxSprites` to keep the capacity fixed). Only the used part of the buffers is uploaded, so a larger capacity costs memory (about 340 bytes per quad), not bandwidth. A bare batch without a renderer cannot flush and throws instead.
+
 A batch starts a new segment (draw call) when every texture slot is taken, or on a blend change or — in scissor mode — a clip change; it submits on `end()`, `flush()` or capacity exhaustion. `batch.stats` exposes `sprites`, `boxes`, `shadows`, `flushes`, `drawCalls`, `renderPasses`, `glyphs`, `clipChanges`, `textureSwitches`, `texturesBound`, `backdropCopies`, `backdropPasses`. Solid fills, boxes and shadows never force a texture switch (a segment that holds only those even adopts the first textured quad's texture).
 
 ## Runtime support

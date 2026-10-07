@@ -4,6 +4,7 @@ import { orderedChildren } from '../input/InputManager'
 import type { BatchDrawContext } from './BatchDrawContext'
 import { cornerRadii } from '../core/paintBox'
 import { buildTransform } from './transform'
+import { ensureExtents, type Extents } from './extents'
 
 export interface PaintTreeStats {
   nodesPainted: number
@@ -11,17 +12,49 @@ export interface PaintTreeStats {
 }
 
 const matrix = new Affine2()
+/** @internal Test switch: with `culling.enabled = false` every node is painted (the reference for culling-correctness tests). */
+export const culling = { enabled: true }
 const clipRadii: [number, number, number, number] = [0, 0, 0, 0]
+
+/** True when `e` (in the parent's content space, origin `(ox, oy)`) lies entirely outside the active clip, or the viewport when there is none. */
+function outside(e: Extents, ox: number, oy: number, ctx: BatchDrawContext, vw: number, vh: number): boolean {
+  let x0 = ox + e.x0
+  let y0 = oy + e.y0
+  let x1 = ox + e.x1
+  let y1 = oy + e.y1
+  const t = ctx.batch.currentTransform
+  // clips and the viewport are in screen space: take the screen bounds of the (possibly transformed) extents
+  if (!t.isIdentity() && Number.isFinite(x0 + y0 + x1 + y1)) {
+    const ax = t.applyX(x0, y0)
+    const ay = t.applyY(x0, y0)
+    const bx = t.applyX(x1, y0)
+    const by = t.applyY(x1, y0)
+    const cx = t.applyX(x1, y1)
+    const cy = t.applyY(x1, y1)
+    const dx = t.applyX(x0, y1)
+    const dy = t.applyY(x0, y1)
+    x0 = Math.min(ax, bx, cx, dx)
+    y0 = Math.min(ay, by, cy, dy)
+    x1 = Math.max(ax, bx, cx, dx)
+    y1 = Math.max(ay, by, cy, dy)
+  }
+  const clip = ctx.batch.clip
+  const minX = clip ? clip.x : 0
+  const minY = clip ? clip.y : 0
+  const maxX = clip ? clip.x + clip.width : vw
+  const maxY = clip ? clip.y + clip.height : vh
+  return x0 >= maxX || y0 >= maxY || x1 <= minX || y1 <= minY
+}
 
 /**
  * Depth-first paint traversal: absolute coordinates, opacity/transform/clip stacks, z-ordered children,
  * and culling of subtrees that fall outside the active clip or the viewport.
  */
 export function paintTree(root: UINode, ctx: BatchDrawContext, viewportW: number, viewportH: number, stats: PaintTreeStats): void {
-  paintNode(root, 0, 0, ctx, viewportW, viewportH, 0, stats, false)
+  paintNode(root, 0, 0, ctx, viewportW, viewportH, stats)
 }
 
-function paintNode(node: UINode, ox: number, oy: number, ctx: BatchDrawContext, vw: number, vh: number, transformDepth: number, stats: PaintTreeStats, parentCulls: boolean): void {
+function paintNode(node: UINode, ox: number, oy: number, ctx: BatchDrawContext, vw: number, vh: number, stats: PaintTreeStats): void {
   const cs = node.computedStyle
   if (cs.display === 'none' || cs.opacity <= 0) return
   const l = node.layout
@@ -30,25 +63,13 @@ function paintNode(node: UINode, ox: number, oy: number, ctx: BatchDrawContext, 
   const w = l.width
   const h = l.height
 
-  const hasTransform = buildTransform(cs.transform, w, h, matrix)
-  const transforming = hasTransform || transformDepth > 0
-  if (!transforming) {
-    // cull against the active clip / viewport (children outside a clip are invisible by definition)
-    const clip = ctx.batch.clip
-    const minX = clip ? clip.x : 0
-    const minY = clip ? clip.y : 0
-    const maxX = clip ? clip.x + clip.width : vw
-    const maxY = clip ? clip.y + clip.height : vh
-    const mayCull = parentCulls || cs.overflow !== 'visible' || node.children.length === 0
-    // outer shadows paint outside the box: keep nodes whose shadow still reaches into view
-    let reach = 0
-    for (const sh of cs.boxShadow) if (!sh.inset) reach = Math.max(reach, Math.max(Math.abs(sh.offsetX), Math.abs(sh.offsetY)) + sh.blur * 1.5 + Math.max(0, sh.spread))
-    if (mayCull && (x - reach >= maxX || y - reach >= maxY || x + w + reach <= minX || y + h + reach <= minY)) {
-      stats.nodesCulled++
-      return
-    }
+  // cull the whole subtree when its bounds (box, shadows, overflowing descendants, own transform) miss the clip / viewport
+  if (culling.enabled && outside(ensureExtents(node), ox, oy, ctx, vw, vh)) {
+    stats.nodesCulled++
+    return
   }
 
+  const hasTransform = buildTransform(cs.transform, w, h, matrix)
   stats.nodesPainted++
   const fade = cs.opacity < 1
   if (fade) ctx.pushOpacity(cs.opacity)
@@ -68,7 +89,7 @@ function paintNode(node: UINode, ox: number, oy: number, ctx: BatchDrawContext, 
     const ordered = orderedChildren(node)
     for (let i = 0; i < ordered.length; i++) {
       const c = ordered[i]!
-      paintNode(c, cox, coy, ctx, vw, vh, transforming ? transformDepth + 1 : transformDepth, stats, node.cullsChildren)
+      paintNode(c, cox, coy, ctx, vw, vh, stats)
     }
   }
   node.paintOverlay(ctx, x, y, w, h)

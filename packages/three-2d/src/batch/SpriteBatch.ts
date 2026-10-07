@@ -78,6 +78,12 @@ export interface BatchOptions {
   renderer?: BatchRenderer
   /** Quad capacity per buffer (up to 262143, indices are 32-bit). Default 4096. */
   maxSprites?: number
+  /**
+   * Largest capacity the buffers grow to by themselves (default 32768). A frame that had to flush mid-way for capacity (extra draw
+   * calls, no frame replay) doubles the capacity at the next `begin()`, up to this limit; set it to `maxSprites` to keep the capacity
+   * fixed. Growth needs a renderer: a bare batch throws when it runs out.
+   */
+  maxSpritesLimit?: number
   /** Convert sRGB vertex colors to linear in the shader (default true). */
   srgbVertexColors?: boolean
   /**
@@ -252,6 +258,7 @@ function textureUnits(renderer: unknown): number | null {
 }
 
 const DEFAULT_MAX_SPRITES = 4096
+const DEFAULT_SPRITES_LIMIT = 32768
 /** Resolution of the "painted since the last backdrop capture" bitmap. */
 const DIRTY_COLS = 24
 const DIRTY_ROWS = 16
@@ -265,16 +272,19 @@ export class SpriteBatch implements Disposable {
   /** Optional hook for tests/tools: called for every segment boundary. */
   onFlush: ((reason: FlushReason, segment: Readonly<BatchSegment>) => void) | null = null
 
-  readonly maxSprites: number
+  private _maxSprites: number
+  private readonly growLimit: number
+  /** A frame flushed for capacity: grow the buffers at the next `begin()`. */
+  private capacityHit = false
   protected renderer: BatchRenderer | null
 
-  protected readonly vertices: Float32Array
-  protected readonly indices: Uint32Array
+  protected vertices: Float32Array
+  protected indices: Uint32Array
   protected vertexCount = 0
   protected indexCount = 0
 
-  private readonly interleaved: InterleavedBuffer
-  private readonly indexAttribute: BufferAttribute
+  private interleaved: InterleavedBuffer
+  private indexAttribute: BufferAttribute
   private materials: BatchMaterialCache | null = null
   private readonly requestedTextures: number | 'auto'
   /** Slot budget resolved for the current renderer (see `resolveSlots`). */
@@ -354,7 +364,8 @@ export class SpriteBatch implements Disposable {
 
   constructor(options: BatchOptions = {}) {
     const maxSprites = Math.min(options.maxSprites ?? DEFAULT_MAX_SPRITES, 262143)
-    this.maxSprites = maxSprites
+    this._maxSprites = maxSprites
+    this.growLimit = Math.min(262143, Math.max(maxSprites, Math.floor(options.maxSpritesLimit ?? DEFAULT_SPRITES_LIMIT)))
     this.renderer = options.renderer ?? null
     this.vertices = new Float32Array(maxSprites * 4 * VERTEX_STRIDE)
     // 32-bit indices: Three's WebGPU backend silently replaces a Uint16 attribute array with a converted copy on first
@@ -374,6 +385,11 @@ export class SpriteBatch implements Disposable {
     this.maxGradientStops = stops
     this.gradientSmall = gradientClasses(stops)[0]
     this.scene.matrixAutoUpdate = false
+  }
+
+  /** Quads the buffers hold now (grows by itself after a frame that overflowed, see `maxSpritesLimit`). */
+  get maxSprites(): number {
+    return this._maxSprites
   }
 
   get begun(): boolean {
@@ -404,6 +420,13 @@ export class SpriteBatch implements Disposable {
   }
 
   private dropMeshesAndMaterials(): void {
+    this.dropMeshes()
+    this.materials?.dispose()
+    this.materials = null
+  }
+
+  /** Drop the pooled meshes and their geometries; the materials (and their compiled shaders) stay. */
+  private dropMeshes(): void {
     for (const mesh of this.meshes) {
       this.scene.remove(mesh)
       mesh.geometry.removeEventListener('dispose', this.onGeometryDispose)
@@ -413,8 +436,22 @@ export class SpriteBatch implements Disposable {
     this.meshPools.clear()
     this.meshCursor.clear()
     this.segMeshes.length = 0
-    this.materials?.dispose()
-    this.materials = null
+  }
+
+  /**
+   * Double the buffers after a frame that had to flush for capacity. Called at `begin()`, when nothing is buffered, so no content is
+   * copied; the pooled meshes are rebuilt on the new buffers (their materials are kept: no shader work, only geometry setup).
+   */
+  private growCapacity(): void {
+    this.capacityHit = false
+    if (this._maxSprites >= this.growLimit) return
+    const next = Math.min(this.growLimit, this._maxSprites * 2)
+    this.dropMeshes()
+    this._maxSprites = next
+    this.vertices = new Float32Array(next * 4 * VERTEX_STRIDE)
+    this.indices = new Uint32Array(next * 6)
+    this.interleaved = new InterleavedBuffer(this.vertices, VERTEX_STRIDE).setUsage(DynamicDrawUsage)
+    this.indexAttribute = new BufferAttribute(this.indices, 1).setUsage(DynamicDrawUsage)
   }
 
   private placeholders: DataTexture[] = []
@@ -591,6 +628,7 @@ export class SpriteBatch implements Disposable {
     this.midFrameFlush = false
     if (camera) this.camera = camera
     this.resolveSlots()
+    if (this.capacityHit) this.growCapacity()
     this.vertexCount = 0
     this.indexCount = 0
     this.segmentCount = 0
@@ -1124,8 +1162,16 @@ export class SpriteBatch implements Disposable {
       const y0 = round.cy - round.hh
       const x1 = round.cx + round.hw
       const y1 = round.cy + round.hh
-      const hit = (cornerX: number, cornerY: number, r: number): boolean => r > 0 && maxX > Math.min(cornerX, cornerX + r) && minX < Math.max(cornerX, cornerX + r) && maxY > Math.min(cornerY, cornerY + r) && minY < Math.max(cornerY, cornerY + r)
-      if (!hit(x0, y0, round.r0) && !hit(x1, y0, -round.r1) && !hit(x1, y1, -round.r2) && !hit(x0, y1, round.r3)) return 0
+      // corner squares: radii order is top-left, top-right, bottom-right, bottom-left; each square extends inward from its corner
+      const hit = (sx0: number, sy0: number, sx1: number, sy1: number): boolean => sx1 > sx0 && maxX > sx0 && minX < sx1 && maxY > sy0 && minY < sy1
+      if (
+        !hit(x0, y0, x0 + round.r0, y0 + round.r0) &&
+        !hit(x1 - round.r1, y0, x1, y0 + round.r1) &&
+        !hit(x1 - round.r2, y1 - round.r2, x1, y1) &&
+        !hit(x0, y1 - round.r3, x0 + round.r3, y1)
+      ) {
+        return 0
+      }
     }
     let entry = this.clipEntries.get(c)
     if (entry === undefined) {
@@ -1233,13 +1279,14 @@ export class SpriteBatch implements Disposable {
 
   /** Reserve room for `vertexN` vertices / `indexN` indices, flushing for capacity if needed. */
   protected reserve(vertexN: number, indexN: number): void {
-    if (this.vertexCount + vertexN > this.maxSprites * 4 || this.indexCount + indexN > this.indices.length) {
-      if (vertexN > this.maxSprites * 4 || indexN > this.indices.length) {
+    if (this.vertexCount + vertexN > this._maxSprites * 4 || this.indexCount + indexN > this.indices.length) {
+      if (vertexN > this._maxSprites * 4 || indexN > this.indices.length) {
         throw new Error('[three-2d] a single draw exceeds the batch capacity; raise maxSprites')
       }
       if (!this.renderer) {
         throw new Error(`[three-2d] batch capacity (${this.maxSprites} sprites) exceeded and no renderer was supplied to flush into`)
       }
+      this.capacityHit = true
       this.submit('capacity')
     }
   }

@@ -7,6 +7,7 @@ import { StateFlags, type EventMap, type UIEvent, type UIEventHandler, type UIEv
 import { CHILD_ORDER_DIRTY, DEP_ACTIVE, DEP_DISABLED, DEP_FOCUS, DEP_HOVER, PAINT_DIRTY, STYLE_DIRTY, SUBTREE_STYLE_DIRTY, TEXT_DIRTY } from './flags'
 import type { ThreeUI } from './ThreeUI'
 import type { UIDrawContext } from '../paint/DrawContext'
+import type { Extents } from '../paint/extents'
 import type { NodeFx } from '../anim/engine'
 import type { UIAnimation } from '../anim/Animation'
 import type { AnimationOptions, Keyframes } from '../style/types'
@@ -67,6 +68,10 @@ export abstract class UINode {
   _fx: NodeFx | null = null
 
   private readonly _children: UINode[] = []
+  /** @internal Paint / hit bounds in the parent's content space (`paint/extents.ts`); stale while `_extDirty`. */
+  readonly _ext: Extents = { x0: 0, y0: 0, x1: 0, y1: 0 }
+  /** @internal */
+  _extDirty = true
   private _style: StyleProp
   private _className: string
   private _styleComputedOnce = false
@@ -131,6 +136,7 @@ export abstract class UINode {
     child._attach(this._ui)
     child.markDirty(STYLE_DIRTY)
     this.markDirty(CHILD_ORDER_DIRTY)
+    this._markExtDirty()
   }
 
   remove(child: UINode): void {
@@ -142,6 +148,7 @@ export abstract class UINode {
     child.parent = null
     child._attach(null)
     this.markDirty(CHILD_ORDER_DIRTY)
+    this._markExtDirty()
   }
 
   indexOf(child: UINode): number {
@@ -233,6 +240,11 @@ export abstract class UINode {
 
   // ───────────────────────────── invalidation ─────────────────────────────
 
+  /** @internal Invalidate this node's paint bounds and its ancestors' (a node that is already stale has stale ancestors above it, up to its first clipping one). */
+  _markExtDirty(): void {
+    for (let n: UINode | null = this; n && !n._extDirty; n = n.parent) n._extDirty = true
+  }
+
   markDirty(flags: number): void {
     this.dirty |= flags
     if (flags & STYLE_DIRTY) {
@@ -271,6 +283,7 @@ export abstract class UINode {
     const layoutChanged = syncYoga(this._yoga, prev, next)
     this.computedStyle = next
     this._styleComputedOnce = true
+    this._markExtDirty()
     ui.stats.styleRecomputes++
     ui._paintDirty = true
 
@@ -375,6 +388,7 @@ export abstract class UINode {
     l.y = t
     l.width = w
     l.height = h
+    if (changed) this._markExtDirty()
     return changed
   }
 

@@ -1,5 +1,15 @@
 # @implicit-invocation/three-2d
 
+## 0.9.0
+
+### Minor Changes
+
+- Overall performance: paint extents, auto-growing batch capacity, rounded shader-clip fix
+  
+  - three-ui: every node caches the bounds of everything it paints (box, shadows, text shadow/stroke, overflowing descendants, its own transform), invalidated on layout / style / child / animation changes. Painting culls whole subtrees against them, also under transforms and for rows inside a plain wrapper `View` under a `ScrollView`; hit testing prunes with the same bounds. A 2000-row list paints 49 nodes instead of 2037 (render 0.96 → 0.11 ms, hit test 0.10 → 0.03 ms headless)
+  - three-2d: a frame that flushed for capacity doubles the batch buffers at the next `begin()`, up to the new `maxSpritesLimit` option (default 32768; materials are kept)
+  - three-2d: fix `clip: 'shader'` with rounded clips: quads in the top-right, bottom-right and bottom-left corner squares were not clipped (only the top-left was)
+
 ## 0.8.0
 
 ### Minor Changes

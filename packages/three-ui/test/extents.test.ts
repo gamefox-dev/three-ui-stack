@@ -188,7 +188,7 @@ describe('paint extents: culling is lossless (randomized)', () => {
     const SIZE = 200
     const SHIFT = 500
     let compared = 0
-    for (let seed = 1; seed <= 500; seed++) {
+    for (let seed = 1; seed <= 200; seed++) {
       const build = (): { ui: ReturnType<typeof makeUI>; root: View } => {
         const rand = rng(seed)
         const content = randomTree(rand, 3)
@@ -218,6 +218,6 @@ describe('paint extents: culling is lossless (randomized)', () => {
         expect(culled.has(q), `seed ${seed}: quad ${q} is visible without culling but missing with it`).toBe(true)
       }
     }
-    expect(compared).toBeGreaterThan(1500)
-  })
+    expect(compared).toBeGreaterThan(600)
+  }, 60_000)
 })

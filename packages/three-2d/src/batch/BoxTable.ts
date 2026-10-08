@@ -27,8 +27,11 @@ export class BoxTable implements Disposable {
   private rows: number
   private readonly subscribers = new Set<TableSubscriber>()
   private disposed = false
+  private uploadedWords: Uint32Array | null = null
+  private uploadedLength = 0
 
-  constructor() {
+  /** Cache small, often-stationary tables (clips); leave frequently changing box tables on the direct upload path. */
+  constructor(private readonly cacheUploads = false) {
     this.rows = INITIAL_ROWS
     this.data = new Float32Array(TABLE_WIDTH * this.rows * 4)
     this.texture = BoxTable.createTexture(this.data, this.rows)
@@ -69,6 +72,8 @@ export class BoxTable implements Disposable {
     this.data = data
     this.rows = rows
     this.texture = BoxTable.createTexture(data, rows)
+    this.uploadedWords = null
+    this.uploadedLength = 0
     old.dispose()
     for (const s of this.subscribers) s.value = this.texture
   }
@@ -79,9 +84,25 @@ export class BoxTable implements Disposable {
     this.cursor = 0
   }
 
-  /** Mark the texture dirty so the entries written since `reset()` reach the GPU. */
+  /** Mark active entries dirty. Cached tables retain their GPU contents across `reset()` and skip identical uploads. */
   upload(): void {
-    if (this.cursor > 0) this.texture.needsUpdate = true
+    if (this.cursor === 0) return
+    if (this.cacheUploads) {
+      const length = this.cursor * 4
+      // Compare bits: signed zero and NaN payloads must not be silently changed by float equality.
+      const words = new Uint32Array(this.data.buffer, this.data.byteOffset, length)
+      let same = this.uploadedWords !== null && length <= this.uploadedLength
+      if (same) {
+        for (let i = 0; i < length; i++) {
+          if (words[i] !== this.uploadedWords![i]) { same = false; break }
+        }
+      }
+      if (same) return
+      if (!this.uploadedWords || this.uploadedWords.length < length) this.uploadedWords = new Uint32Array(length)
+      this.uploadedWords.set(words)
+      this.uploadedLength = length
+    }
+    this.texture.needsUpdate = true
   }
 
   get rowCount(): number {
@@ -92,6 +113,7 @@ export class BoxTable implements Disposable {
     if (this.disposed) return
     this.disposed = true
     this.texture.dispose()
+    this.uploadedWords = null
     this.subscribers.clear()
   }
 }

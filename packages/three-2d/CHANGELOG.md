@@ -1,5 +1,17 @@
 # @implicit-invocation/three-2d
 
+## 0.10.0
+
+### Minor Changes
+
+- Reduce animation-driven UI rebuilds and redundant uploads:
+
+  - Retain ordinary bitmap geometry during opacity-only animations. Update small vertex-alpha ranges and replay the static batch; unsupported effects, mixed properties, layout/source changes, zero opacity, and capacity-flushed frames fall back to full painting. Enabled by default; `retainImageOpacity: false` opts out. `ui.stats.retainedOpacityUpdates` reports the fast path.
+  - Skip paint invalidation for fully hidden paint-only animation changes while preserving animation clocks, lifecycle events, and reveal behavior. `ui.needsUpdate` distinguishes animation/scheduling work from `ui.needsRender`; hosts must continue calling `update(dt)` for hidden effects.
+  - Cache unchanged shader-clip table contents rather than re-uploading the full texture for a stationary clip.
+  - Use version-tracked stream buffer usage with WebGPURenderer so static replay does not upload full vertex/index capacity every frame; preserve the classic WebGL usage hint.
+  - Restore inherited animated properties on descendants when an effect is cancelled.
+
 ## 0.9.0
 
 ### Minor Changes

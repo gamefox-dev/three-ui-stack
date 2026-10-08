@@ -1,6 +1,6 @@
 {
   "name": "@implicit-invocation/three-ui",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Retained-mode 2D UI on three-2d with Yoga flexbox layout. No React, no DOM required.",
   "license": "MIT",
   "type": "module",

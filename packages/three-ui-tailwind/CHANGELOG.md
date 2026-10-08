@@ -1,5 +1,13 @@
 # @implicit-invocation/three-ui-tailwind
 
+## 0.10.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @implicit-invocation/three-ui@0.10.0
+  - @implicit-invocation/three-ui-react@0.10.0
+
 ## 0.9.0
 
 ### Patch Changes

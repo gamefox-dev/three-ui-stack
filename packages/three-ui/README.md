@@ -94,7 +94,7 @@ Also: `letterSpacing`, `lineHeight`, `textAlign`, `whiteSpace: 'nowrap'`, `numbe
 
 ### Animations & transitions
 
-All time comes from **your** `ui.update(dt)`: `dt = 0` freezes every animation and transition, a scaled `dt` slow-motions them, nothing reads a clock. `ui.needsRender` stays true while something moves.
+All time comes from **your** `ui.update(dt)`: `dt = 0` freezes every animation and transition, a scaled `dt` slow-motions them, nothing reads a clock. `ui.needsUpdate` stays true while animation clocks/lifecycle need updates, even offscreen. `ui.needsRender` includes visible effects, but fully clipped paint-only animations no longer force redraws. Keep calling `update(dt)` for hidden effects so scrolling them into view reveals their current phase; if scheduling frames on demand, use `needsUpdate` as well as `needsRender`.
 
 ```ts
 // CSS-like, from style (keyframes registered once, or via Tailwind @keyframes)
@@ -170,10 +170,11 @@ createThreeUI({
   maxGradientStops: 3,        // cap the gradient shader's loop (2…8, default 8; ≤ 3-stop gradients are already cheap)
   clip: 'shader',             // default with a renderer: overflow clipping in the fragment shader (no render pass per clip, rounded corners honoured); 'scissor' = one render() per clip rect
   replayStaticFrames: true,   // default: render() redraws the previous frame's batch when nothing changed
+  retainImageOpacity: true,   // default: plain bitmap fades update only their vertex alpha, replaying the static batch
 })
 ```
 
-`ui.stats` reports `drawCalls`, `renderPasses`, `texturesBound`, `textureSwitches` and `replayed` (true when the last `render()` replayed). `clip: 'scissor'` uses one `renderer.render()` per distinct clip rectangle — on `WebGPURenderer` each is a full render pass (~1 ms of CPU each, plus a tile load/store on mobile GPUs), so a screen with 7 clipped lists paid ~6 ms per frame; the default `'shader'` clips in the fragment shader instead, and a node with `overflow: hidden` and `border-radius` then round-clips its children.
+`ui.stats` reports `drawCalls`, `renderPasses`, `texturesBound`, `textureSwitches` and `replayed` (true when the last `render()` replayed). `retainedOpacityUpdates` counts plain bitmap fades applied without repainting the tree: only small vertex ranges upload; indices and unchanged clip tables do not. Images with box/drop-shadow/backdrop effects, custom paint, zero opacity, mixed animation properties, or capacity-flushed batches use the normal repaint path. `clip: 'scissor'` uses one `renderer.render()` per distinct clip rectangle — on `WebGPURenderer` each is a full render pass (~1 ms of CPU each, plus a tile load/store on mobile GPUs), so a screen with 7 clipped lists paid ~6 ms per frame; the default `'shader'` clips in the fragment shader instead, and a node with `overflow: hidden` and `border-radius` then round-clips its children.
 
 **First-use hitch.** `await ui.warmup()` (optionally `['normal', 'additive', …]`) builds and compiles the UI's shaders up front — about 100–300 ms once, instead of ~25 ms dropped frames the first time a screen needs them. The UI uses two materials per blend mode however many draw calls a frame has, so nothing new is built when a scroll or screen change adds draw calls.
 

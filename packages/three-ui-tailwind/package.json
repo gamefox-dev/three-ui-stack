@@ -1,6 +1,6 @@
 {
   "name": "@implicit-invocation/three-ui-tailwind",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Tailwind CSS v4 authoring for three-ui: classes compile to three-ui style data, no DOM CSS and no runtime CSS parsing.",
   "license": "MIT",
   "type": "module",

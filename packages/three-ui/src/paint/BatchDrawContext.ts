@@ -24,6 +24,11 @@ export class BatchDrawContext implements UIDrawContext {
     readonly counters: PaintCounters,
   ) {}
 
+  /** @internal Parent multiplier before this node's optional opacity push (for retained bitmap fades). */
+  inheritedOpacity(pushed: boolean): number {
+    return pushed ? this.opacityStack[this.opacityStack.length - 1]! : this.opacity
+  }
+
   /** Reset per-frame state; call after `batch.begin()`. */
   reset(): void {
     this.opacity = 1

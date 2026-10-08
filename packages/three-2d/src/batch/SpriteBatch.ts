@@ -2,6 +2,7 @@ import {
   BufferGeometry,
   DataTexture,
   DynamicDrawUsage,
+  StreamDrawUsage,
   InterleavedBuffer,
   InterleavedBufferAttribute,
   BufferAttribute,
@@ -343,6 +344,7 @@ export class SpriteBatch implements Disposable {
   private dataIndex = 0
   /** Per-frame float table read by box / shadow / backdrop quads. */
   readonly table = new BoxTable()
+  private retainedAlphaDirty = false
   /** Backdrop blur pipeline (null when disabled / unsupported). */
   readonly backdrop: BackdropBlur | null
   private backdropRequested = 0
@@ -371,20 +373,26 @@ export class SpriteBatch implements Disposable {
     // 32-bit indices: Three's WebGPU backend silently replaces a Uint16 attribute array with a converted copy on first
     // upload, after which edits to our array would never reach the GPU. A Uint32Array is used as-is.
     this.indices = new Uint32Array(maxSprites * 6)
-    this.interleaved = new InterleavedBuffer(this.vertices, VERTEX_STRIDE).setUsage(DynamicDrawUsage)
-    this.indexAttribute = new BufferAttribute(this.indices, 1).setUsage(DynamicDrawUsage)
+    this.interleaved = new InterleavedBuffer(this.vertices, VERTEX_STRIDE).setUsage(this.bufferUsage)
+    this.indexAttribute = new BufferAttribute(this.indices, 1).setUsage(this.bufferUsage)
     const wantsBackdrop = options.backdrop !== undefined && options.backdrop !== 'off' && options.renderer !== undefined
     const rendererWithCopy = options.renderer as unknown as Partial<BackdropRenderer> | undefined
     this.backdrop = wantsBackdrop && typeof rendererWithCopy?.copyFramebufferToTexture === 'function' ? new BackdropBlur(options.renderer as unknown as BackdropRenderer, options.backdrop as 'low' | 'full') : null
     this.srgbVertexColors = options.srgbVertexColors ?? true
     this.clipMode = options.clip ?? 'scissor'
     this.shaderClip = this.clipMode === 'shader'
-    this.clipTable = this.shaderClip ? new BoxTable() : null
+    this.clipTable = this.shaderClip ? new BoxTable(true) : null
     this.requestedTextures = options.maxTextures ?? 'auto'
     const stops = Math.max(2, Math.min(MAX_GRADIENT_STOPS, Math.floor(options.maxGradientStops ?? MAX_GRADIENT_STOPS)))
     this.maxGradientStops = stops
     this.gradientSmall = gradientClasses(stops)[0]
     this.scene.matrixAutoUpdate = false
+  }
+
+  private get bufferUsage() {
+    // WebGPURenderer's common Attributes treats DynamicDrawUsage as an unconditional upload every render, ignoring version.
+    // StreamDrawUsage still permits frequent writes, but uploads only when needsUpdate changes; classic WebGL keeps its old hint.
+    return (this.renderer as { isWebGLRenderer?: boolean } | null)?.isWebGLRenderer === true ? DynamicDrawUsage : StreamDrawUsage
   }
 
   /** Quads the buffers hold now (grows by itself after a frame that overflowed, see `maxSpritesLimit`). */
@@ -450,8 +458,8 @@ export class SpriteBatch implements Disposable {
     this._maxSprites = next
     this.vertices = new Float32Array(next * 4 * VERTEX_STRIDE)
     this.indices = new Uint32Array(next * 6)
-    this.interleaved = new InterleavedBuffer(this.vertices, VERTEX_STRIDE).setUsage(DynamicDrawUsage)
-    this.indexAttribute = new BufferAttribute(this.indices, 1).setUsage(DynamicDrawUsage)
+    this.interleaved = new InterleavedBuffer(this.vertices, VERTEX_STRIDE).setUsage(this.bufferUsage)
+    this.indexAttribute = new BufferAttribute(this.indices, 1).setUsage(this.bufferUsage)
   }
 
   private placeholders: DataTexture[] = []
@@ -625,6 +633,7 @@ export class SpriteBatch implements Disposable {
     if (this._begun) throw new Error('[three-2d] SpriteBatch.begin() called twice without end()')
     this._begun = true
     this.replayable = false
+    this.retainedAlphaDirty = false
     this.midFrameFlush = false
     if (camera) this.camera = camera
     this.resolveSlots()
@@ -1764,8 +1773,29 @@ export class SpriteBatch implements Disposable {
     return !this._begun && this.replayable && this.indexCount > 0 && this.renderer !== null && this.camera !== null && !this.disposed
   }
 
+  /** @internal Vertex cursor for recording retained UI image ranges during paint. */
+  get vertexCursor(): number { return this.vertexCount }
+
+  /** @internal Change only retained vertex alpha; replay uploads these small ranges, not the full geometry/index buffers. */
+  updateVertexAlpha(start: number, count: number, alpha: number): boolean {
+    if (!this.canReplay || !Number.isInteger(start) || !Number.isInteger(count) || start < 0 || count <= 0 || start + count > this.vertexCount) throw new Error('[three-2d] invalid retained alpha range')
+    alpha = Math.fround(alpha)
+    let changed = false
+    for (let i = start; i < start + count; i++) if (!Object.is(this.vertices[i * VERTEX_STRIDE + OFFSET_COLOR + 3], alpha)) changed = true
+    if (!changed) return false
+    if (!this.retainedAlphaDirty) {
+      this.interleaved.clearUpdateRanges()
+      this.interleaved.needsUpdate = true
+      this.retainedAlphaDirty = true
+    }
+    for (let i = start; i < start + count; i++) this.vertices[i * VERTEX_STRIDE + OFFSET_COLOR + 3] = alpha
+    this.interleaved.addUpdateRange(start * VERTEX_STRIDE, count * VERTEX_STRIDE)
+    return true
+  }
+
   /**
-   * Draw the previous frame again without rebuilding it: no `begin()` / draw calls / `end()`, and the buffers are not re-uploaded.
+   * Draw the previous frame again without rebuilding it: no `begin()` / draw calls / `end()`. Buffers are not re-uploaded unless
+   * a retained alpha range was changed with `updateVertexAlpha()`.
    * For a UI that did not change between frames. `stats` keeps the build counters (sprites, boxes, …) and refreshes the render ones
    * (`drawCalls`, `renderPasses`, `texturesBound`, backdrop counters).
    */
@@ -1776,7 +1806,7 @@ export class SpriteBatch implements Disposable {
     s.renderPasses = 0
     s.texturesBound = 0
     this.backdrop?.beginFrame()
-    this.drawSegments()
+    try { this.drawSegments() } finally { this.retainedAlphaDirty = false }
     if (this.backdrop) {
       s.backdropPasses = this.backdrop.passCount
       s.backdropCopies = this.backdrop.copyCount

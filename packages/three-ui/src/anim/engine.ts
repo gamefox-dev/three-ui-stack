@@ -6,6 +6,7 @@ import type { UINode } from '../core/UINode'
 import { UIAnimationEvent, UITransitionEvent, type UIEvent } from '../input/events'
 import { valuesEqual, type ComputedStyle, type ResolvedTransition } from '../style/computed'
 import { syncYoga } from '../style/yogaSync'
+import { isPaintVisible } from '../paint/visibility'
 import { INHERITED_KEYS, type AnimationOptions, type AnimationSpec, type Keyframes } from '../style/types'
 import { UIAnimation, type AnimationNotice, type TimingSpec } from './Animation'
 import { parseEasingFn, type EasingFn } from './easing'
@@ -75,13 +76,35 @@ export class AnimationEngine {
 
   constructor(private readonly ui: ThreeUI) {}
 
-  /** True while something is moving (the host should keep rendering). */
+  /** True while clocks/lifecycle need updates, including effects whose paint is entirely hidden. */
   get hasRunning(): boolean {
     for (const node of this.nodes) {
       const fx = node._fx
       if (!fx) continue
       if (fx.transitions.size > 0 || fx.dirty) return true
       for (const a of fx.animations) if (a.playState === 'running') return true
+    }
+    return false
+  }
+
+  /** Running effects that may affect visible paint. Hidden clocks still advance through `tick()`. */
+  get hasVisibleRunning(): boolean {
+    if (this.nodes.size === 0) return false
+    if (!this.ui._hasLocalPaint()) return this.hasRunning
+    const v = this.ui.environment.viewport
+    for (const node of this.nodes) {
+      const fx = node._fx
+      if (!fx) continue
+      let running = fx.dirty || fx.transitions.size > 0
+      for (const a of fx.animations) if (a.playState === 'running') running = true
+      if (!running) continue
+      // Layout/inherited effects can affect other nodes; visibility is not a safe shortcut for them.
+      for (const t of fx.transitions.values()) if (isLayoutProperty(t.key) || INHERITED.has(t.key)) return true
+      for (const a of fx.animations) {
+        if (a.playState !== 'running') continue
+        for (const t of a.compiled.tracks) if (isLayoutProperty(t.key) || INHERITED.has(t.key)) return true
+      }
+      if (isPaintVisible(node, v.width, v.height)) return true
     }
     return false
   }
@@ -325,13 +348,17 @@ export class AnimationEngine {
   private apply(node: UINode, fx: NodeFx, live: boolean): void {
     const base = fx.base!
     const vis = fx.visible ?? (fx.visible = { ...base })
-    // animated transforms / shadows move the node's paint bounds (and mutate `computedStyle` in place, so nothing else tells the node)
-    node._markExtDirty()
+    const viewport = this.ui.environment.viewport
+    const wasVisible = live && (!this.ui._hasLocalPaint() || isPaintVisible(node, viewport.width, viewport.height))
     const v = vis as unknown as Record<string, unknown>
     const b = base as unknown as Record<string, unknown>
     // remember outgoing layout values so Yoga only sees real changes
     let before: Record<string, unknown> | null = null
+    let inherited = false
+    let opacityOnly = true
     for (const k of fx.animatedKeys) {
+      if (k !== 'opacity') opacityOnly = false
+      if (INHERITED.has(k)) inherited = true
       if (isLayoutProperty(k)) (before ??= {})[k] = v[k]
       v[k] = b[k]
     }
@@ -358,13 +385,17 @@ export class AnimationEngine {
         fx.animatedKeys.add(track.key)
       }
     }
+    // Check both old and new bounds: entering/leaving the viewport must paint/erase the affected pixels.
+    for (const k of fx.animatedKeys) if (k !== 'opacity') opacityOnly = false
+    if (!opacityOnly) node._markExtDirty()
     if (!live) return
 
-    // inherited properties (text color, stroke…) feed descendants
-    let inherited = false
+    // inherited properties (text color, stroke…) feed descendants, including outgoing/cancelled effects
     for (const k of fx.animatedKeys) if (INHERITED.has(k)) inherited = true
     if (!inherited && before === null) {
-      this.ui._paintDirty = true
+      if (wasVisible || isPaintVisible(node, viewport.width, viewport.height)) {
+        if (!opacityOnly || !this.ui._retainOpacity(node)) this.ui._paintDirty = true
+      }
       return
     }
     if (inherited) for (const c of node.children) c.markDirty(STYLE_DIRTY)

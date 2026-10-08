@@ -13,6 +13,13 @@ import { YGEnums as E, getYogaConfig } from '../yoga/runtime'
 import { DEP_COLOR_SCHEME, DEP_MOTION, DEP_THEME, DEP_VIEWPORT, STYLE_DIRTY, SUBTREE_STYLE_DIRTY } from './flags'
 import type { NodeKind, UINode } from './UINode'
 import { View } from './View'
+import { Image } from './Image'
+import { Text } from './Text'
+import { NinePatchView } from './NinePatchView'
+import { ScrollView } from './ScrollView'
+import { AnimatedImage } from './AnimatedImage'
+
+const builtinPaint = new Set([View.prototype, Image.prototype, Text.prototype, NinePatchView.prototype, ScrollView.prototype, AnimatedImage.prototype])
 
 /** Renderer surface needed by `ThreeUI` (a Three `WebGPURenderer` satisfies it). Caller-owned. */
 export interface ThreeUIRenderer extends BatchRenderer {
@@ -62,6 +69,15 @@ export interface ThreeUIOptions {
    * (default true; needs a renderer). `ui.stats.replayed` tells which happened.
    */
   replayStaticFrames?: boolean
+  /** Retain plain bitmap geometry during opacity-only animations (default true; requires static replay and a renderer). */
+  retainImageOpacity?: boolean
+}
+
+interface ImageOpacityRange {
+  generation: number
+  start: number
+  inheritedOpacity: number
+  tintAlpha: number
 }
 
 /** Debug counters (spec §19.5). Style/layout counters are cumulative; paint counters describe the last frame. */
@@ -89,6 +105,8 @@ export interface UIStats {
   nodesCulled: number
   /** Last `render()`: true when it replayed the previous frame's batch instead of repainting the tree. */
   replayed: boolean
+  /** Last frame: bitmap fades applied to retained geometry without repainting the tree. */
+  retainedOpacityUpdates: number
 }
 
 export type ThemeStyles = Partial<Record<NodeKind | 'root', Style>>
@@ -126,6 +144,7 @@ export class ThreeUI implements Disposable {
     nodesPainted: 0,
     nodesCulled: 0,
     replayed: false,
+    retainedOpacityUpdates: 0,
   }
   /** Internal parent of the user root; sized to the viewport so `flex: 1` roots fill the screen. */
   readonly viewRoot: View
@@ -148,6 +167,11 @@ export class ThreeUI implements Disposable {
   private _updatePending = true
   private disposed = false
   private replayStatic = true
+  private readonly retainImageOpacity: boolean
+  private paintGeneration = 0
+  private localPaintSafe: boolean | null = null
+  private readonly imageOpacityRanges = new WeakMap<UINode, ImageOpacityRange>()
+  private readonly pendingImageOpacity = new Map<UINode, ImageOpacityRange>()
   private hasRendered = false
   /** @internal */ _paintDirty = true
 
@@ -172,6 +196,7 @@ export class ThreeUI implements Disposable {
       ...(options.renderer || options.clip ? { clip: options.clip ?? 'shader' } : {}),
     })
     this.replayStatic = options.replayStaticFrames !== false
+    this.retainImageOpacity = options.retainImageOpacity !== false && this.replayStatic && this.renderer !== null
     this.ctx = new BatchDrawContext(this.batch, this.counters)
     this.engine = new AnimationEngine(this)
     this.viewRoot = new View({ name: 'viewRoot', style: { width: options.width, height: options.height } })
@@ -315,9 +340,66 @@ export class ThreeUI implements Disposable {
     this.tickables.delete(t)
   }
 
-  /** True when `update()`/`render()` would produce a different picture (or animations are running). */
+  /** True while `update(dt)` is needed, even when running animation clocks are entirely offscreen. */
+  get needsUpdate(): boolean {
+    return this._updatePending || this.tickables.size > 0 || this.engine.hasRunning
+  }
+
+  /** True when the picture is dirty or visible effects are running. Call `update(dt)` even for hidden effects (`needsUpdate`). */
   get needsRender(): boolean {
-    return this._paintDirty || this._updatePending || this.tickables.size > 0 || this.engine.hasRunning
+    return this._paintDirty || this._updatePending || this.pendingImageOpacity.size > 0 || this.tickables.size > 0 || this.engine.hasVisibleRunning
+  }
+
+  /** @internal Tree changes invalidate the conservative custom-painter guard. */
+  _invalidatePaintSafety(): void { this.localPaintSafe = null }
+
+  /** @internal Custom painters can depend on arbitrary other nodes: keep their old whole-tree invalidation semantics. */
+  _hasLocalPaint(): boolean {
+    if (this.localPaintSafe === null) {
+      const stack: UINode[] = [this.viewRoot]
+      this.localPaintSafe = true
+      while (stack.length > 0) {
+        const node = stack.pop()!
+        const proto = Object.getPrototypeOf(node)
+        if (!builtinPaint.has(proto) || node.paintSelf !== proto.paintSelf || node.paintOverlay !== proto.paintOverlay) {
+          this.localPaintSafe = false
+          break
+        }
+        for (const child of node.children) stack.push(child)
+      }
+    }
+    return this.localPaintSafe
+  }
+
+  /** @internal Queue a safe opacity-only bitmap update; all other mutations fall back to ordinary paint invalidation. */
+  _retainOpacity(node: UINode): boolean {
+    if (!this.retainImageOpacity || !this._hasLocalPaint() || !this.batch.canReplay || node.computedStyle.opacity <= 0) return false
+    const range = this.imageOpacityRanges.get(node)
+    if (!range || range.generation !== this.paintGeneration) return false
+    this.pendingImageOpacity.set(node, range)
+    return true
+  }
+
+  private readonly captureImageOpacity = (node: UINode, start: number, count: number, inheritedOpacity: number): void => {
+    // Exact built-in Image only: custom paint, box effects, and multi-quad images are not assumed alpha-separable.
+    if (Object.getPrototypeOf(node) !== Image.prototype || node.paintSelf !== Image.prototype.paintSelf || node.paintOverlay !== Image.prototype.paintOverlay || count !== 4 || node.computedStyle.opacity <= 0) return
+    const s = node.computedStyle
+    if (s.backgroundColor.a > 0 || s.backgroundGradient || s.boxShadow.length > 0 || s.dropShadow.length > 0 ||
+        s.backdropBlur > 0 || s.backdropBrightness !== 1 || s.backdropSaturate !== 1 ||
+        (s.borderWidth ?? 0) > 0 || (s.borderTopWidth ?? 0) > 0 || (s.borderRightWidth ?? 0) > 0 ||
+        (s.borderBottomWidth ?? 0) > 0 || (s.borderLeftWidth ?? 0) > 0) return
+    this.imageOpacityRanges.set(node, { generation: this.paintGeneration, start, inheritedOpacity, tintAlpha: s.tintColor.a })
+  }
+
+  private applyImageOpacity(): boolean {
+    for (const [node, range] of this.pendingImageOpacity) {
+      if (node.isDisposed || range.generation !== this.paintGeneration || node.computedStyle.opacity <= 0) return false
+    }
+    for (const [node, range] of this.pendingImageOpacity) {
+      if (this.batch.updateVertexAlpha(range.start, 4, range.tintAlpha * (range.inheritedOpacity * node.computedStyle.opacity))) this.stats.retainedOpacityUpdates++
+    }
+    this.pendingImageOpacity.clear()
+    return true
   }
 
   // ───────────────────────────── update: style → layout ─────────────────────────────
@@ -408,6 +490,7 @@ export class ThreeUI implements Disposable {
   render(): void {
     if (this.disposed) return
     this.update(0)
+    this.stats.retainedOpacityUpdates = 0
     const renderer = this.renderer
     if (renderer && this.clearColor) {
       const c = this.clearColor
@@ -418,8 +501,8 @@ export class ThreeUI implements Disposable {
       renderer.autoClear = auto
     }
     const batch = this.batch
-    if (this.replayStatic && !this._paintDirty && this.tickables.size === 0 && !this.engine.hasRunning && batch.canReplay) {
-      // nothing changed: the previous frame's quads are still in the batch buffers
+    if (this.replayStatic && !this._paintDirty && this.tickables.size === 0 && batch.canReplay && this.applyImageOpacity()) {
+      // Geometry is unchanged: optional bitmap alpha edits are applied in-place, then the static batch is replayed.
       batch.replay()
       this.hasRendered = true
       this.stats.replayed = true
@@ -432,11 +515,13 @@ export class ThreeUI implements Disposable {
     this.counters.paintOps = 0
     this.paintStats.nodesPainted = 0
     this.paintStats.nodesCulled = 0
+    this.paintGeneration++
     batch.begin(this.camera)
     this.ctx.reset()
     this.ctx.snap = 1 / this.environment.viewport.pixelRatio
-    paintTree(this.viewRoot, this.ctx, this.environment.viewport.width, this.environment.viewport.height, this.paintStats)
+    paintTree(this.viewRoot, this.ctx, this.environment.viewport.width, this.environment.viewport.height, this.paintStats, this.retainImageOpacity && this._hasLocalPaint() ? this.captureImageOpacity : undefined)
     batch.end()
+    this.pendingImageOpacity.clear()
     this._paintDirty = false
     this.copyBatchStats()
   }
@@ -485,6 +570,7 @@ export class ThreeUI implements Disposable {
     this.disposed = true
     this.tickables.clear()
     this.viewRoot.dispose()
+    this.pendingImageOpacity.clear()
     this.batch.dispose()
     this.renderer = null
     this.userRoot = null

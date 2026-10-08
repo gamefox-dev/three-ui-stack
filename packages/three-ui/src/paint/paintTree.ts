@@ -50,11 +50,13 @@ function outside(e: Extents, ox: number, oy: number, ctx: BatchDrawContext, vw: 
  * Depth-first paint traversal: absolute coordinates, opacity/transform/clip stacks, z-ordered children,
  * and culling of subtrees that fall outside the active clip or the viewport.
  */
-export function paintTree(root: UINode, ctx: BatchDrawContext, viewportW: number, viewportH: number, stats: PaintTreeStats): void {
-  paintNode(root, 0, 0, ctx, viewportW, viewportH, stats)
+export type ImagePaintCapture = (node: UINode, start: number, count: number, inheritedOpacity: number) => void
+
+export function paintTree(root: UINode, ctx: BatchDrawContext, viewportW: number, viewportH: number, stats: PaintTreeStats, capture?: ImagePaintCapture): void {
+  paintNode(root, 0, 0, ctx, viewportW, viewportH, stats, capture)
 }
 
-function paintNode(node: UINode, ox: number, oy: number, ctx: BatchDrawContext, vw: number, vh: number, stats: PaintTreeStats): void {
+function paintNode(node: UINode, ox: number, oy: number, ctx: BatchDrawContext, vw: number, vh: number, stats: PaintTreeStats, capture?: ImagePaintCapture): void {
   const cs = node.computedStyle
   if (cs.display === 'none' || cs.opacity <= 0) return
   const l = node.layout
@@ -78,7 +80,9 @@ function paintNode(node: UINode, ox: number, oy: number, ctx: BatchDrawContext, 
     const m = new Affine2().translate(x, y).multiply(matrix).translate(-x, -y)
     ctx.pushTransform(m)
   }
+  const imageStart = capture && node.kind === 'Image' ? ctx.batch.vertexCursor : -1
   node.paintSelf(ctx, x, y, w, h)
+  if (imageStart >= 0) capture!(node, imageStart, ctx.batch.vertexCursor - imageStart, ctx.inheritedOpacity(fade))
 
   const clips = cs.overflow !== 'visible'
   if (clips) ctx.pushClip({ x, y, width: w, height: h }, cs.borderRadius > 0 || cs.borderTopLeftRadius || cs.borderTopRightRadius || cs.borderBottomRightRadius || cs.borderBottomLeftRadius ? cornerRadii(cs, clipRadii) : undefined)
@@ -89,7 +93,7 @@ function paintNode(node: UINode, ox: number, oy: number, ctx: BatchDrawContext, 
     const ordered = orderedChildren(node)
     for (let i = 0; i < ordered.length; i++) {
       const c = ordered[i]!
-      paintNode(c, cox, coy, ctx, vw, vh, stats)
+      paintNode(c, cox, coy, ctx, vw, vh, stats, capture)
     }
   }
   node.paintOverlay(ctx, x, y, w, h)

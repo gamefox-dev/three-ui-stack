@@ -247,6 +247,7 @@ export abstract class UINode {
 
   markDirty(flags: number): void {
     this.dirty |= flags
+    if (flags & CHILD_ORDER_DIRTY) this._ui?._invalidatePaintSafety()
     if (flags & STYLE_DIRTY) {
       for (let p = this.parent; p && !(p.dirty & SUBTREE_STYLE_DIRTY); p = p.parent) p.dirty |= SUBTREE_STYLE_DIRTY
     }
